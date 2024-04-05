@@ -1,0 +1,14 @@
+Contexto;;;;Información de atributos:
+"Este conjunto de datos data de 1988 y consta de cuatro bases de datos: Cleveland, Hungría, Suiza y Long Beach V. Contiene 76 atributos, incluido el atributo predicho, pero todos los experimentos publicados hacen referencia al uso de un subconjunto de 14 de ellos. El campo ""objetivo"" se refiere a la presencia de enfermedad cardiaca en el paciente. Tiene un valor entero 0 = sin enfermedad y 1 = enfermedad.";;;;1. años
+Contenido;;;;2. sexo
+Información de atributos:;;;;3. tipo de dolor torácico (4 valores)
+;;;;4. presión arterial en reposo
+;;;;5. colestoral sérico en mg/dl
+;;;;6. Azúcar en sangre en ayunas > 120 mg/dl
+;;;;7. resultados electrocardiográficos en reposo (valores 0,1,2)
+;;;;8. frecuencia cardíaca máxima alcanzada
+;;;;9. angina inducida por el ejercicio
+;;;;10. oldpeak = depresión del ST inducida por el ejercicio en relación con el reposo
+;;;;11. la pendiente del segmento ST de ejercicio máximo
+;;;;12. número de vasos principales (0-3) coloreados por fluoroscopia
+;;;;"13. tal: 0 = normal; 1 = defecto fijo; 2 = defecto reversible"
