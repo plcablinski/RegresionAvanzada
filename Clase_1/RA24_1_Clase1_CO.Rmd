@@ -1,0 +1,481 @@
+---
+title: "Regresión Lineal Simple - Clase 1"
+author: "Cecilia Oliva"
+date: "14/05/2024"
+output:
+   html_document:
+     toc: yes
+     code_folding: show
+     toc_float: yes
+     df_print: paged
+     theme: united
+     code_download: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<br>
+<br>
+
+# Correlación e introducción al modelo lineal
+
+<br>
+
+## <span style="color:darkred">Ejemplo 1: Índice de masa corporal infantil.</span>
+
+<br>
+
+Realizamos los diagramas de dispersión de las variables del dataset IMCinfantil.xlsx.
+```{r, echo=TRUE}
+library(readxl)
+library(ggplot2)
+
+IMCinfantil<-read_excel("IMCinfantil.xlsx")
+dim(IMCinfantil)#150 9
+head(IMCinfantil)
+attach(IMCinfantil) # carga la base en la memoria activa
+
+base.ninios=data.frame(EDAD,PESO,TALLA,IMC,CC) # arma una sub-base con las variables numéricas de IMCinfantil
+par(bg="white")
+pairs(base.ninios) # representa todos los diagramas de dispersión de a pares
+
+
+#Diagrama de dispersión sencillo
+plot(PESO,CC,pch=16,col=1,xlab="Peso",ylab="Circunferencia de la Cintura")
+title("Peso vs Circunferencia de la Cintura")
+
+#Diagrama con ggplot
+ggplot(data = IMCinfantil, aes(x = PESO, y = CC)) +
+  geom_point(colour = "red4") +
+  ggtitle("Peso vs Circunferencia de la Cintura") +
+  theme_bw() + theme(plot.title = element_text(hjust = 0.5))
+
+```
+<br>
+<br>
+
+### Boxplots y medidas resumen
+
+```{r, echo=TRUE}
+#Boxplots
+
+library(dplyr)#Paquete para manipular datos
+par(mfrow=c(1,2),oma=c(0,0,2,0)) # personaliza el espacio de gráfico
+boxplot(PESO) # realiza un boxplot básico
+boxplot(PESO,horizontal=T) # realiza un boxplot horizontal
+mtext("Gráficos de cajas básicos", outer = TRUE, cex = 1.5) # pone un título para ambos gráficos
+par(mfrow=c(1,1))
+
+IMCinf<-IMCinfantil# Renombro la base para luego seguir utilizando la original
+# Cambia el nombre a campos categóricos de la variable CatPeso
+Peso<-IMCinf%>%pull(CatPeso)%>%plyr::mapvalues(c("D","N","OB","SO"),c( "Deficiente","Normal","Obeso","Sobrepeso") )
+
+IMCinf$CatPeso=Peso
+
+IMCinf$CatPeso<-ordered(IMCinf$CatPeso,levels=c("Deficiente","Normal","Sobrepeso","Obeso")) # cambia el orden de las cajas
+with(IMCinf,boxplot(IMCinf$CC~IMCinf$CatPeso,boxcol=topo.colors(5),col=terrain.colors(5),main="Circunferencia de cintura según peso",xlab="Categoría Peso",ylab="Circunferencia de la Cintura"))
+
+summary(PESO)
+mean(PESO)
+median(PESO)
+sd(PESO)
+quantile(PESO,c(0.25,0.50,0.75))
+```
+
+<br>
+
+### Análisis de normalidad de las variables - Test de Shapiro Wilk
+
+```{r, echo=TRUE}
+#Analizamos normalidad de las variables
+par(mfrow = c(1, 2)) 
+hist(PESO, breaks = 10, main = "", xlab = "Peso", border = "darkred") 
+hist(CC, breaks = 10, main = "", xlab = "Circ. Cintura", border = "blue")
+
+qqnorm(PESO, main = "Peso", col = "darkred") 
+qqline(PESO) 
+qqnorm(CC, main = "Circ. Cintura", col = "blue") 
+qqline(CC)
+
+par(mfrow = c(1, 1)) 
+
+#Test de hipótesis para el análisis de normalidad 
+shapiro.test(PESO)
+shapiro.test(CC)
+
+
+```
+En ambos casos el test de Shapiro Wilk rechaza normalidad. 
+<br>
+
+### Análisis de normalidad multivariada - Test de Henze Zirkler
+
+```{r, echo=TRUE}
+#Analizamos normalidad bivariada
+library(MVN)
+peso_cc=data.frame(PESO,CC)
+#Usamos Test Henze-Zirkler para evaluar normalidad multivariada (bivariada en este caso)
+respuesta_testHZ<-mvn(peso_cc , mvnTest = "hz")
+respuesta_testHZ
+respuesta_testHZ$multivariateNormality
+```
+
+### Cálculo de correlación
+<br>
+Se calcula la correlación de Pearson entre las variables peso y longitud de circunferencia de la cintura (aunque no se cumple el supuesto de normalidad bivariada).
+```{r, echo=TRUE}
+cor(PESO,CC)
+cor(PESO,CC,method="pearson")
+cor.test(PESO,CC,method="pearson")
+```
+
+<br>
+
+Como no se cumple el supuesto de normalidad bivariada recurrimos
+al cálculo de correlación de Spearman.
+```{r, echo=TRUE}
+cor(PESO,CC,method="spearman")
+cor.test(PESO,CC,method="spearman")
+
+
+
+```
+<br>
+Qué se observa??
+
+<br>
+
+### Correlograma
+<br>
+```{r,echo=TRUE}
+library(corrplot)
+M=cor(base.ninios) # calcula la matriz de correlación de las variables de la base
+M
+
+var(base.ninios)# calcula la matriz de varianzas y covarianzas
+
+par(mfrow=c(2,2))
+corrplot(M,method="circle") # representa la matriz de correlaciones mediante círculos
+corrplot(M,method="square") # representa la matriz de correlaciones mediante cuadrados
+#corrplot(M,method="ellipse") # representa la matriz de correlaciones mediante elipses
+corrplot(M,method="number") # representa la matriz de correlaciones mediante números
+#corrplot(M,method="shade") # representa la matriz de correlaciones mediante sombreandos
+#corrplot(M,method="pie") # representa la matriz de correlaciones mediante gráficos de torta
+#corrplot(M,type="upper") # representa sólo la parte superior de la matriz de correlación
+#corrplot(M,type="lower") # representa sólo la parte inferior de la matriz de correlación
+#corrplot(M,method="ellipse",type="upper") # permite combinaciones de estilos
+corrplot.mixed(M) # representa la matriz de correlacion combinando círculos y números
+#corrplot.mixed(M,lower="circle",upper="shade") # permite combinaciones de estilos por bloques
+
+par(mfrow=c(1,1))
+
+```
+
+## <span style="color:darkred">Ejemplo 2: Gorriones</span>
+
+<br>
+
+Realizamos los diagramas de dispersión de las variables del dataset gorriones.xlsx.
+```{r, echo=TRUE}
+gorr<- read_excel("gorriones.xlsx")
+gorr<-as.data.frame(gorr)
+dim(gorr)#49  7
+names(gorr)
+par(bg="white")
+pairs(gorr) # representa todos los diagramas de dispersión de a pares
+
+#Diagrama con ggplot
+ggplot(data = gorr, aes(x = Cabeza, y = Alas)) +
+  geom_point(colour = "red4") +
+  ggtitle("Cabeza vs Alas") +
+  theme_bw() + theme(plot.title = element_text(hjust = 0.5))
+
+```
+<br>
+
+
+### Análisis de normalidad de las variables - Test de Shapiro Wilk
+```{r, echo=TRUE}
+#Analizamos normalidad de las variables
+par(mfrow = c(1, 2)) 
+hist(gorr$Cabeza, breaks = 10, main = "", xlab = "Cabeza", border = "darkred") 
+hist(gorr$Alas, breaks = 10, main = "", xlab = "Alas", border = "blue")
+
+qqnorm(gorr$Cabeza, main = "Cabeza", col = "darkred") 
+qqline(gorr$Cabeza) 
+qqnorm(gorr$Alas, main = "Alas", col = "blue") 
+qqline(gorr$Alas)
+par(mfrow = c(1, 1))
+
+shapiro.test(gorr$Cabeza)
+shapiro.test(gorr$Alas)
+
+```
+
+<br>
+
+### Análisis de normalidad multivariada - Test de Henze Zirkler
+
+```{r, echo=TRUE}
+library(MVN)
+cabeza_alas=data.frame(gorr$Cabeza,gorr$Alas)
+#Usamos Test Henze-Zirkler para evaluar normalidad multivariada (bivariada en este caso)
+resp_testHZ<-mvn(cabeza_alas , mvnTest = "hz")
+resp_testHZ
+resp_testHZ$multivariateNormality
+```
+<br>
+
+### Cálculo de correlación
+<br>
+Se calcula la correlación de pearson entre la longitud de la cabeza y la longitud de las alas ya que se cumple el supuesto de normalidad.
+```{r, echo=TRUE}
+cor(gorr$Cabeza,gorr$Alas)
+cor(gorr$Cabeza,gorr$Alas,method="pearson")
+cor.test(gorr$Cabeza,gorr$Alas,method="pearson")
+
+
+```
+<br>
+
+## <span style="color:darkred">Modelos Lineales</span>
+
+Supongamos que queremos estudiar la longitud del largo de los gorriones en función de las otras variables a través de un modelo lineal.
+
+```{r,echo=TRUE}
+############# modelos lineales simples y múltiples
+model_gorr1 <- lm(Largo ~ Alas, data = gorr)
+summary(model_gorr1)
+model_gorr2 <- lm(Largo ~ Cabeza, data = gorr)
+summary(model_gorr2)
+model_gorr3 <- lm(Largo ~ Pata, data = gorr)
+summary(model_gorr3)
+model_gorr4 <- lm(Largo ~ Cuerpo, data = gorr)
+summary(model_gorr4)
+
+model_gorr5 <- lm(Largo ~ Alas + Pata, data = gorr)
+summary(model_gorr5)
+
+
+
+model_gorr <- lm(Largo ~ Alas + Cabeza + Pata + Cuerpo, data = gorr)
+summary(model_gorr)
+
+```
+<br>
+
+## <span style="color:darkred">Comparación de modelos</span>
+
+<br>
+
+### Usando comando anova
+<br>
+```{r,echo=TRUE}
+
+#Comparación de modelos
+anova(model_gorr1,model_gorr5)# NO es significativo el modelo con más variables!
+anova(model_gorr3,model_gorr5)
+anova(model_gorr2,model_gorr)
+anova(model_gorr1,model_gorr)
+anova(model_gorr3,model_gorr)
+anova(model_gorr5,model_gorr)
+```
+
+<br>
+
+### Usando AIC y BIC
+<br>
+```{r,echo=TRUE}
+
+AIC(model_gorr1)
+BIC(model_gorr1)
+AIC(model_gorr2)
+BIC(model_gorr2)
+AIC(model_gorr3)
+BIC(model_gorr3)
+AIC(model_gorr5)
+BIC(model_gorr5)
+AIC(model_gorr)
+BIC(model_gorr)
+
+
+```
+<br>
+
+## <span style="color:darkred">Estimación de coeficientes y recta de regresión</span>
+
+<br>
+
+### Test de Wald
+<br>
+```{r,echo=TRUE}
+#install.packages("aod")
+library(aod)
+
+wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 2:3)#compara cabeza y pata-> Rechaza que al menos uno de los coef es 0
+wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 1)#compara Alas-> NO Rechaza que el coef es 0
+wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 2)#compara Cabeza-> Rechaza que el coef es 0
+wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 3)#compara Pata -> NO rechaza que el coef es 0
+wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 4)#compara Cuerpo-> NO rechaza que el coef es 0
+
+```
+**Observación: **Hay diferencias entre el resultado obtenido en la significación del
+coef. de Cuerpo en el modelo (se ve que es significativo) y la significancia 
+del test de WALD de ese mismo coeficiente del mismo modelo.
+Puede deberse a que exista colinealidad entre las variables y el modelo 
+confunde la significatividad de las mismas.
+<br>
+
+### Intervalos de confianza
+
+Veamos los intervalos de confianza a nivel 95% de los coeficientes:
+```{r,echo=TRUE}
+confint(model_gorr)#por default el nivel es 0.95
+
+```
+
+<br>
+
+### Gráfico de recta de regresión
+<br>
+```{r,echo=TRUE}
+
+#Gráfico de recta de regresión
+ggplot(data = gorr, mapping = aes(x = Alas, y = Largo)) + 
+  geom_point(color = "firebrick", size = 2) + 
+  labs(title = "Largo ~ Alas", x = "Alas") + 
+  geom_smooth(method = "lm", se = FALSE, color = "black") + 
+  theme_bw() + theme(plot.title = element_text(hjust = 0.5))
+
+```
+<br>
+
+## <span style="color:darkred">Predicción e intervalos de confianza</span>
+
+
+Genero nuevos datos en el rango de X.
+```{r,echo=TRUE}
+
+
+nuevosdatos <- seq(from = min(gorr$Alas), to = max(gorr$Alas), length.out = 100) 
+
+```
+<br>
+Predigo Largos de nuevos valores de Alas.
+```{r,echo=TRUE}
+predict(object = model_gorr1, newdata = data.frame(Alas = nuevosdatos))
+```
+<br>
+Los valores de Alas varían entre 230 y 252, puedo predecir un valor fuera de ese rango, sí, pero puede no ser muy confiable esa predicción.
+```{r,echo=TRUE}
+predict(object = model_gorr1, newdata = data.frame(Alas=280))
+```
+<br>
+
+Predigo Y y agrego su intervalo de confianza para cada uno de los nuevos datos generados. 
+```{r,echo=TRUE}
+intervalosConf <- predict(object = model_gorr1, newdata = data.frame(Alas = nuevosdatos), interval = "confidence", level = 0.95) 
+head(intervalosConf, 5)
+```
+<br>
+Armo el gráfico con las curvas de puntos de extremos superiores e inferiores de los intervalos.
+```{r,echo=TRUE}
+plot(gorr$Alas, gorr$Largo, col = "firebrick", pch = 19, ylab = "Largo", xlab = "Alas", main = "Largo vs Alas") 
+abline(model_gorr1, col = 1) 
+lines(x = nuevosdatos, y = intervalosConf[, 2], type = "l", col = 2, lty = 3) 
+lines(x = nuevosdatos, y = intervalosConf[, 3], type = "l", col = 3, lty = 3)
+
+#lo mismo pero con ggplot:
+ggplot(data = gorr, mapping = aes(x = Alas, y = Largo)) + 
+  geom_point(color = "firebrick", size = 2) + 
+  labs(title = "Largo vs Alas", x = "Alas") + 
+  geom_smooth(method = "lm", se = TRUE, color = "black") + theme_bw() + 
+  theme(plot.title = element_text(hjust = 0.5)) 
+# Por defecto incluye la región de 95% de confianza
+
+
+```
+<br>
+
+## <span style="color:darkred">Validación de supuestos y análisis diagnóstico</span>
+
+<br>
+
+### Análisis de normalidad de los residuos - Test de Shapiro Wilk
+<br>
+```{r,echo=TRUE}
+
+#Analizamos si los residuos son normales 
+gorr2<-gorr
+gorr2$prediccion <- model_gorr1$fitted.values 
+gorr2$residuos <- model_gorr1$residuals
+
+ggplot(data = gorr2, aes(x = residuos)) + geom_histogram(aes(y = ..density..)) + 
+  labs(title = "Histograma de los residuos") + theme_bw() + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+qqnorm(model_gorr1$residuals) 
+qqline(model_gorr1$residuals)
+
+shapiro.test(model_gorr1$residuals)
+
+```
+
+<br>
+
+### Gráfico de análisis de homocedasticidad
+
+<br>
+Analizamos si los residuos presentan estructura en este gráfico. Si se observa algún patrón visual se podría decir que no es válido el supuesto de homocedasticidad. 
+```{r,echo=TRUE}
+ggplot(data = gorr2, aes(x = prediccion, y = residuos)) + 
+  geom_point(aes(color = residuos)) + 
+  scale_color_gradient2(low = "blue3", mid = "grey", high = "red") + 
+  geom_hline(yintercept = 0) + geom_segment(aes(xend = prediccion, yend = 0), alpha = 0.2) + 
+  labs(title = "Distribución de los residuos", x = "predicción modelo", y = "residuo") + 
+  theme_bw() + 
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+```
+
+En este caso no se observa estructura en los residuos.
+
+<br>
+
+### Test de Breusch-Pagan 
+<br>
+Analizamos si los residuos tienen varianza constante (homocedasticidad) con el test de Breusch-Pagan.
+```{r,echo=TRUE}
+#install.packages("lmtest")
+library(lmtest) 
+bptest(model_gorr1)
+```
+Concluimos que no se rechaza homocedasticidad.
+<br>
+
+### Gráfico de análisis de independencia de las observaciones
+Analizamos el gráfico de residuos según el orden de las observaciones para ver si se observa dependencia.
+```{r,echo=TRUE}
+ggplot(data = gorr2, aes(x = seq_along(residuos), y = residuos)) + 
+  geom_point(aes(color = residuos)) + 
+  scale_color_gradient2(low = "blue3", mid = "grey", high = "red") + 
+  geom_line(size = 0.3) + labs(title = "Distribución de los residuos", x = "index", y = "residuo")+ 
+  geom_hline(yintercept = 0) + 
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+
+```
+No se detecta un patrón en el gráfico.
+
+<br>
+
+### Test de Durbin-Watson 
+<br>
+Analizamos autocorrelación de los residuos. La hipótesis nula del test es la no autocorrelación, es decir que nos gustaría no rechazar el test para validar los supuestos del modelo lineal.
+```{r,echo=TRUE}
+library(car)
+dwt(model_gorr1)
+```
+Es decir que no rechaza no autocorrelación en los residuos, es decir que no hay autocorrelación en los residuos, por lo tanto se valida el supuesto de independencia de las observaciones.
+
+<br>
