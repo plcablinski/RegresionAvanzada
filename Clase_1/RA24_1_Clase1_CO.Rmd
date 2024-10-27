@@ -175,11 +175,12 @@ Qué se observa??
 ### Correlograma
 <br>
 ```{r,echo=TRUE}
-library(corrplot)
+library(corrplot) # carga el paquete corrplot que sirve para visualizar matrices de correlación 
 M=cor(base.ninios) # calcula la matriz de correlación de las variables de la base
 M
 
 var(base.ninios)# calcula la matriz de varianzas y covarianzas
+
 
 par(mfrow=c(2,2))
 corrplot(M,method="circle") # representa la matriz de correlaciones mediante círculos
