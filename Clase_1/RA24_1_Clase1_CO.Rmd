@@ -36,16 +36,22 @@ IMCinfantil<-read_excel("IMCinfantil.xlsx")
 dim(IMCinfantil)#150 9
 head(IMCinfantil)
 attach(IMCinfantil) # carga la base en la memoria activa
+```
 
+```{r, echo=TRUE}
 base.ninios=data.frame(EDAD,PESO,TALLA,IMC,CC) # arma una sub-base con las variables numéricas de IMCinfantil
 par(bg="white")
 pairs(base.ninios) # representa todos los diagramas de dispersión de a pares
+```
 
 
+```{r, echo=TRUE}
 #Diagrama de dispersión sencillo
 plot(PESO,CC,pch=16,col=1,xlab="Peso",ylab="Circunferencia de la Cintura")
 title("Peso vs Circunferencia de la Cintura")
+```
 
+```{r, echo=TRUE}
 #Diagrama con ggplot
 ggplot(data = IMCinfantil, aes(x = PESO, y = CC)) +
   geom_point(colour = "red4") +
@@ -107,6 +113,27 @@ shapiro.test(CC)
 
 
 ```
+```{r, echo=TRUE}
+library(moments)
+jarque.test(PESO)
+jarque.test(CC)
+par(mfrow = c(1, 2))
+hist(PESO, freq = FALSE)
+lines(density(PESO), col = "red")
+
+lines(density(PESO, adjust = 2), col = "blue", lty = 2)
+hist(CC, freq = FALSE)
+lines(density(CC), col = "blue")
+lines(density(CC, adjust = 2), col = "red", lty = 2)
+par(mfrow = c(1, 1))
+
+```
+```{r, echo=TRUE}
+ks.test(PESO,"pnorm",mean(PESO),sd(PESO))
+ks.test(CC,"pnorm",mean(CC),sd(CC))
+```
+
+
 En ambos casos el test de Shapiro Wilk rechaza normalidad. 
 <br>
 
@@ -137,9 +164,7 @@ Como no se cumple el supuesto de normalidad bivariada recurrimos
 al cálculo de correlación de Spearman.
 ```{r, echo=TRUE}
 cor(PESO,CC,method="spearman")
-cor.test(PESO,CC,method="spearman")
-
-
+cor.test(PESO,CC,method="spearman", exact=FALSE)
 
 ```
 <br>
