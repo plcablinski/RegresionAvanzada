@@ -120,7 +120,6 @@ jarque.test(CC)
 par(mfrow = c(1, 2))
 hist(PESO, freq = FALSE)
 lines(density(PESO), col = "red")
-
 lines(density(PESO, adjust = 2), col = "blue", lty = 2)
 hist(CC, freq = FALSE)
 lines(density(CC), col = "blue")
@@ -185,15 +184,15 @@ var(base.ninios)# calcula la matriz de varianzas y covarianzas
 par(mfrow=c(2,2))
 corrplot(M,method="circle") # representa la matriz de correlaciones mediante círculos
 corrplot(M,method="square") # representa la matriz de correlaciones mediante cuadrados
-#corrplot(M,method="ellipse") # representa la matriz de correlaciones mediante elipses
+corrplot(M,method="ellipse") # representa la matriz de correlaciones mediante elipses
 corrplot(M,method="number") # representa la matriz de correlaciones mediante números
-#corrplot(M,method="shade") # representa la matriz de correlaciones mediante sombreandos
-#corrplot(M,method="pie") # representa la matriz de correlaciones mediante gráficos de torta
-#corrplot(M,type="upper") # representa sólo la parte superior de la matriz de correlación
-#corrplot(M,type="lower") # representa sólo la parte inferior de la matriz de correlación
-#corrplot(M,method="ellipse",type="upper") # permite combinaciones de estilos
+corrplot(M,method="shade") # representa la matriz de correlaciones mediante sombreandos
+corrplot(M,method="pie") # representa la matriz de correlaciones mediante gráficos de torta
+corrplot(M,type="upper") # representa sólo la parte superior de la matriz de correlación
+corrplot(M,type="lower") # representa sólo la parte inferior de la matriz de correlación
+corrplot(M,method="ellipse",type="upper") # permite combinaciones de estilos
 corrplot.mixed(M) # representa la matriz de correlacion combinando círculos y números
-#corrplot.mixed(M,lower="circle",upper="shade") # permite combinaciones de estilos por bloques
+corrplot.mixed(M,lower="circle",upper="shade") # permite combinaciones de estilos por bloques
 
 par(mfrow=c(1,1))
 
@@ -226,9 +225,12 @@ ggplot(data = gorr, aes(x = Cabeza, y = Alas)) +
 ```{r, echo=TRUE}
 #Analizamos normalidad de las variables
 par(mfrow = c(1, 2)) 
-hist(gorr$Cabeza, breaks = 10, main = "", xlab = "Cabeza", border = "darkred") 
-hist(gorr$Alas, breaks = 10, main = "", xlab = "Alas", border = "blue")
-
+hist(gorr$Cabeza, breaks = 10, main = "", xlab = "Cabeza", border = "darkred", freq = FALSE )
+lines(density(gorr$Cabeza), col = "red")
+lines(density(gorr$Cabeza, adjust = 2), col = "blue", lty = 2)
+hist(gorr$Alas, breaks = 10, main = "", xlab = "Alas", border = "blue", freq = FALSE )
+lines(density(gorr$Alas), col = "red")
+lines(density(gorr$Alas, adjust = 2), col = "blue", lty = 2)
 qqnorm(gorr$Cabeza, main = "Cabeza", col = "darkred") 
 qqline(gorr$Cabeza) 
 qqnorm(gorr$Alas, main = "Alas", col = "blue") 
