@@ -274,8 +274,11 @@ Supongamos que queremos estudiar la longitud del largo de los gorriones en funci
 
 ```{r,echo=TRUE}
 ############# modelos lineales simples y múltiples
+# Documentar que hace la siguiente línea
 model_gorr1 <- lm(Largo ~ Alas, data = gorr)
+# La línea anterior ajusta un modelo lineal simple de la variable Largo en función de la variable Alas
 summary(model_gorr1)
+# La línea anterior muestra un resumen del modelo ajustado donde lo más importante es el valor de los coeficientes y el p-valor asociado a cada uno de ellos
 model_gorr2 <- lm(Largo ~ Cabeza, data = gorr)
 summary(model_gorr2)
 model_gorr3 <- lm(Largo ~ Pata, data = gorr)
@@ -303,6 +306,7 @@ summary(model_gorr)
 ```{r,echo=TRUE}
 
 #Comparación de modelos
+anova(model_gorr)
 anova(model_gorr1,model_gorr5)# NO es significativo el modelo con más variables!
 anova(model_gorr3,model_gorr5)
 anova(model_gorr2,model_gorr)

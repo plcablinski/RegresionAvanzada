@@ -18,5 +18,16 @@ result = mvn(data, mvnTest = "hz") # Henze-Zirkler's Multivariate Normality Test
 result$multivariateNormality
 cor.test(x, y, method = "spearman")
 
+# Cuando los valores de ciertas variables que denominaremos regresoras o 
+# explicativas o predictoras nos permite aproximar el valor de una variable de
+# interés que denominaremos variable objetivo o respuesta pero, aún así, no
+# nos permite determinarlo con exactitud tendrá sentido definir un modelo
+# de regresión
 
+# el residuo es la diferencia entre el valor observado y el valor ajustado
+# es positivo si el valor observado es mayor que el valor ajustado
+# es negativo si el valor observado es menor que el valor ajustado
+# ei = valor observadoi − valor ajustado i 
 
+# La suma de cuadrados totales es la suma de los cuadrados de las diferencias
+# entre los valores observados y el promedio de los valores observados.

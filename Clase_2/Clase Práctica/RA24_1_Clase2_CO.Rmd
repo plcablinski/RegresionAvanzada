@@ -1,0 +1,304 @@
+title: "Regresión Lineal Simple - Clase 2"
+author: "Cecilia Oliva"
+date: "16/05/2024"
+output:
+  html_document:
+    toc: yes
+    code_folding: show
+    toc_float: yes
+    df_print: paged
+    theme: united
+    code_download: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<br>
+<br>
+
+# Modelo lineal
+
+<br>
+
+## <span style="color:darkred">Transformación de variables</span>
+
+<br>
+
+### Ejemplo
+
+<br>
+Analizamos los datos de provisión de investigación y docencia universitaria en 62 universidades en Reino Unido en 1988.
+
+Consideramos las siguientes variables para construir un modelo lineal:
+
+nassets: activos netos,
+
+stfees: cuotas de los estudiantes.
+
+```{r, echo=TRUE}
+#install.packages("Ecdat")
+library(Ecdat)
+data(University)
+head(University)
+dim(University)
+linMod <- lm(nassets ~ stfees, data = University)
+summary(linMod)
+
+cor(University$nassets,University$stfees)^2# Observar que coincide con R^2 del modelo linMod
+
+library(car)
+library(lmtest)
+
+plot(University$stfees,University$nassets,xlab="stfees",ylab="nassets",
+     main="stfees vs nassets")
+
+abline(linMod,col="darkviolet",lwd=2)
+```
+<br>
+
+### Analizamos normalidad, homocedasticidad y no autocorrelación de los residuos.
+
+```{r, echo=TRUE}
+shapiro.test(linMod$residuals)
+bptest(linMod)
+
+dwt(linMod)
+
+```
+Se rechaza normalidad y homocedasticidad.
+
+<br>
+
+### Transformaciones de Box y Cox
+
+```{r, echo=TRUE}
+library(MASS)
+boxcox(nassets ~ stfees, lambda = -2:2, data = University)
+```
+<br>
+Observemos que, según el gráfico, el lambda óptimo se encuentra cerca de 0. Entonces consideraremos la transformación logarítmica sobre la variable respuesta.
+
+```{r, echo=TRUE}
+linMod2 <- lm(log10(nassets) ~ stfees, data = University)
+summary(linMod2)
+
+plot(University$stfees,log10(University$nassets),xlab="stfees",ylab="log10(nassets)",
+     main="stfees vs log10(nassets)")
+
+abline(linMod2,col="darkviolet",lwd=2)
+
+```
+<br>
+Realizamos el análisis diagnóstico.
+```{r, echo=TRUE}
+shapiro.test(linMod2$residuals)
+bptest(linMod2)
+
+dwt(linMod2)
+```
+En este caso se vuelve a rechazar normalidad de los residuos. Probamos aplicar la transformación logarítmica a la covariable stfees, y rehacemos el gráfico de Box y Cox. 
+
+
+```{r, echo=TRUE}
+linMod2a<- lm(nassets ~ log10(stfees), data = University)
+summary(linMod2a)
+
+plot(log10(University$stfees),University$nassets,xlab="log10(stfees)",ylab="nassets",
+     main="log10(stfees) vs nassets")
+
+abline(linMod2a,col="darkviolet",lwd=2)
+
+```
+
+<br>
+Realizamos el análisis diagnóstico.
+```{r, echo=TRUE}
+shapiro.test(linMod2a$residuals)
+bptest(linMod2a)
+
+dwt(linMod2a)
+```
+
+En este caso se rechaza normalidad, analizamos si se puede aplicar una transformación de Box y Cox conveniente.
+```{r, echo=TRUE}
+boxcox(nassets ~ log10(stfees), lambda = -2:2, data = University)#lambda cerca de 0
+```
+<br>
+Nuevamente, el gráfico sugiere aplicar a la variable respuesta la transformación logarítmica.
+```{r, echo=TRUE}
+linMod3 <- lm(log10(nassets) ~ log10(stfees), data = University)
+summary(linMod3)
+
+plot(log10(University$stfees),log10(University$nassets),xlab="log10(stfees)",ylab="log10(nassets)",
+     main="log10(stfees) vs log10(nassets)")
+
+abline(linMod3,col="darkviolet",lwd=2)
+```
+<br>
+Evaluamos normalidad, homocedasticidad y no autocorrelación de residuos.
+```{r, echo=TRUE}
+shapiro.test(linMod3$residuals)
+bptest(linMod3)
+
+dwt(linMod3)
+```
+A nivel 1% no se rechaza normalidad de los residuos, y se mantiene la homocedasticidad y la no autocorrelación de los mismos.
+
+<br>
+
+## Intervalos de confianza y de predicción
+
+Graficamos ambas bandas de confianza y predicción para el modelo original.
+
+```{r, echo=TRUE}
+ICcompleto<-predict(linMod, interval="confidence",level=0.95)
+IPcompleto<-predict(linMod,newdata=data.frame(stfees=University$stfees), interval="prediction",level=0.95)
+datos<-data.frame(stfees=University$stfees,nassets=University$nassets,IPcompleto)             
+
+library(ggplot2)
+ggplot(data = datos, mapping = aes(x = stfees, y = nassets)) + 
+  geom_point(color = "firebrick", size = 2) + 
+  labs(title = "Diagrama de dispersión con bandas de confianza y predicción", x = "stfees") + 
+  geom_line(aes(y=lwr), color="red" , linetype="dashed" ) +
+  geom_line(aes(y=upr), color="red" , linetype="dashed" ) +
+  geom_smooth(method = "lm", se = TRUE, color = "black") + 
+  theme_bw() + theme(plot.title = element_text(hjust = 0.5)) 
+# geom_smooth por defecto incluye la región de 95% de confianza.
+```
+
+Analizamos ambos tipos de intervalos en todos los modelos probados cuando stfees=10000.
+```{r, echo=TRUE}
+
+IC<-predict(linMod,newdata=data.frame(stfees=10000),interval="confidence")
+IP<-predict(linMod,newdata=data.frame(stfees=10000),interval="prediction")
+
+IC
+IP
+
+IC2<-predict(linMod2,newdata=data.frame(stfees=10000),interval="confidence")
+IP2<-predict(linMod2,newdata=data.frame(stfees=10000),interval="prediction")
+
+IC2
+IP2
+
+IC3<-predict(linMod3,newdata=data.frame(stfees=10000),interval="confidence")#OJO:NO poner log10(10000)
+IP3<-predict(linMod3,newdata=data.frame(stfees=10000),interval="prediction")#OJO:NO poner log10(10000)
+
+IC3
+IP3
+
+10^IC3
+10^IP3
+```
+Observemos que el intervalo de confianza siempre está contenido en el intervalo de predicción, por lo tanto la longitud de IC es menor que la de IP.
+
+<br>
+
+Por otro lado, a continuación verificamos con el gráfico (haciendo zoom en stfees=10000) que es más correcta la predicción del modelo linMod3 que la de linMod.
+```{r, echo=TRUE}
+plot(University$stfees,University$nassets,xlab="stfees",ylab="nassets",
+     main="stfees vs nassets",ylim=c(0,200000))
+
+abline(linMod,col="darkviolet",lwd=2)
+```
+
+Se puede ver que es más coherente para stfees cercano a 10000, un nassets cercano a 50000 más que a 90000 como sugiere  la recta de regresión de linMod.
+
+<br>
+
+## Outliers, puntos influyentes, y de alto leverage
+
+<br>
+
+### Análisis de residuos y residuos estudentizados
+```{r, echo=TRUE}
+par(mfrow=c(2,2))
+plot(linMod)
+par(mfrow=c(1,1))
+plot(linMod$fitted.values,linMod$residuals)
+
+#plot(linMod3)
+
+res_stu_1<-rstudent(linMod)
+res_stu_1[abs(res_stu_1)>3]
+
+```
+<br>
+
+### Otros puntos influyentes: dfbetas y dffits
+```{r, echo=TRUE}
+influence.measures(model = linMod)
+
+summary(influence.measures(model = linMod))
+
+dfbetas(linMod)[,2]> 1
+
+which(dfbetas(linMod)[,2]>1)
+
+n<-length(University$nassets)
+p<-length(linMod$coefficients)
+which(dffits(linMod)>2 * sqrt(p / n))
+```
+<br>
+
+### Otros puntos influyentes: puntos de alto leverage y distancia de Cook
+```{r, echo=TRUE}
+influencePlot(model = linMod)
+influenceIndexPlot(linMod, vars='Bonf', las=1,col='green')
+hatvalues(linMod)
+outlierTest(linMod)
+
+#leverage
+hatvalues(linMod)
+hist(hatvalues(linMod))
+
+lev<-hatvalues(linMod)
+
+#un criterio (mayores que 0.2) 
+
+which(lev>0.2)
+
+#un criterio mas exigente
+n<-length(University$nassets)
+p<-length(linMod$coefficients)
+which(lev>2*p/n)
+
+#distancias de cook
+dcook<-cooks.distance(linMod)
+influenceIndexPlot(linMod, vars='Cook', las=1,col='blue')
+
+which(dcook>4/n)
+hist(dcook)
+
+#punto de corte
+corted<-qf(0.5,2,n-2)
+which(dcook>corted)
+
+
+```
+<br>
+
+## Cuadrados mínimos ponderados
+
+
+Construimos dos vectores de pesos para evaluar cuadrados mínimos ponderados.
+```{r, echo=TRUE}
+ww<-1 / lm(abs(linMod$residuals) ~ linMod$fitted.values)$fitted.values^2
+www<-1 / (abs(linMod$residuals))#^2
+
+
+plot(University$stfees,University$nassets,xlab="stfees",ylab="nassets",
+     main="stfees vs nassets", ylim=c(0,200000))
+
+abline(linMod,col="darkviolet",lwd=2)
+
+linMod_ww<- lm(nassets ~ stfees, data = University,weights =ww)
+linMod_www<- lm(nassets ~ stfees, data = University,weights =www)
+abline(linMod_ww,col="hotpink",lwd=2)
+abline(linMod_www,col="gold",lwd=2)
+```
+<br>
