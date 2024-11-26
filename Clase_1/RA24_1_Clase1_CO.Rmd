@@ -210,7 +210,7 @@ library(readxl)
 library(ggplot2)
 library(car)
 # setear el directorio de trabajo a la carpeta donde se encuentra el archivo
-setwd('C:/RegresionAvanzada/Clase_1')
+#setwd('C:/RegresionAvanzada/Clase_1')
 gorr<- read_excel("gorriones.xlsx")
 # Que clase es gorr?
 class(gorr)
