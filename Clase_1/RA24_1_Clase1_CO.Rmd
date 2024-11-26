@@ -204,8 +204,18 @@ par(mfrow=c(1,1))
 
 Realizamos los diagramas de dispersión de las variables del dataset gorriones.xlsx.
 ```{r, echo=TRUE}
+# inicializar variables
+rm(list=ls())
+library(readxl)
+library(ggplot2)
+library(car)
+# setear el directorio de trabajo a la carpeta donde se encuentra el archivo
+setwd('C:/RegresionAvanzada/Clase_1')
 gorr<- read_excel("gorriones.xlsx")
-gorr<-as.data.frame(gorr)
+# Que clase es gorr?
+class(gorr)
+# gorr<-as.data.frame(gorr)
+class(gorr)
 dim(gorr)#49  7
 names(gorr)
 par(bg="white")
@@ -235,6 +245,8 @@ qqnorm(gorr$Cabeza, main = "Cabeza", col = "darkred")
 qqline(gorr$Cabeza) 
 qqnorm(gorr$Alas, main = "Alas", col = "blue") 
 qqline(gorr$Alas)
+qqPlot(gorr$Cabeza)
+qqPlot(gorr$Alas)
 par(mfrow = c(1, 1))
 
 shapiro.test(gorr$Cabeza)
