@@ -275,7 +275,7 @@ Se calcula la correlación de pearson entre la longitud de la cabeza y la longit
 cor(gorr$Cabeza,gorr$Alas)
 cor(gorr$Cabeza,gorr$Alas,method="pearson")
 cor.test(gorr$Cabeza,gorr$Alas,method="pearson")
-
+cor(cabeza_alas)
 
 ```
 <br>
@@ -286,9 +286,18 @@ Supongamos que queremos estudiar la longitud del largo de los gorriones en funci
 
 ```{r,echo=TRUE}
 ############# modelos lineales simples y múltiples
-# Documentar que hace la siguiente línea
+library(lmtest)
 model_gorr1 <- lm(Largo ~ Alas, data = gorr)
 # La línea anterior ajusta un modelo lineal simple de la variable Largo en función de la variable Alas
+# Analizar los residuos para verificar si se cumplen los supuestos del modelo
+plot(model_gorr1)
+# La línea anterior muestra los gráficos de diagnóstico del modelo ajustado
+# Hacer el grafico de ajustados vs residuos
+plot(model_gorr1$fitted.values, model_gorr1$residuals)
+# verificar la normalidad, independencia y homocedasticidad de los residuos
+shapiro.test(model_gorr1$residuals)
+dwt(model_gorr1)
+bptest(model_gorr1)
 summary(model_gorr1)
 # La línea anterior muestra un resumen del modelo ajustado donde lo más importante es el valor de los coeficientes y el p-valor asociado a cada uno de ellos
 model_gorr2 <- lm(Largo ~ Cabeza, data = gorr)
@@ -332,18 +341,32 @@ anova(model_gorr5,model_gorr)
 ### Usando AIC y BIC
 <br>
 ```{r,echo=TRUE}
-
-AIC(model_gorr1)
-BIC(model_gorr1)
-AIC(model_gorr2)
-BIC(model_gorr2)
-AIC(model_gorr3)
-BIC(model_gorr3)
-AIC(model_gorr5)
-BIC(model_gorr5)
-AIC(model_gorr)
-BIC(model_gorr)
-
+# Generar un arreglo con los AIC y BIC de los modelos que tenga n filas y 2 columnas
+arreglo <- matrix(NA, nrow = 6, ncol = 2)
+rownames(arreglo) <- c("model_gorr1", "model_gorr2", "model_gorr3", "model_gorr4", "model_gorr5", "model_gorr")
+colnames(arreglo) <- c("AIC", "BIC")
+arreglo[1, 1] <- AIC(model_gorr1)
+arreglo[1, 2] <- BIC(model_gorr1)
+arreglo[2, 1] <- AIC(model_gorr2)
+arreglo[2, 2] <- BIC(model_gorr2)
+arreglo[3, 1] <- AIC(model_gorr3)
+arreglo[3, 2] <- BIC(model_gorr3)
+arreglo[4, 1] <- AIC(model_gorr4)
+arreglo[4, 2] <- BIC(model_gorr4)
+arreglo[5, 1] <- AIC(model_gorr5)
+arreglo[5, 2] <- BIC(model_gorr5)
+arreglo[6, 1] <- AIC(model_gorr)
+arreglo[6, 2] <- BIC(model_gorr)
+arreglo
+# Elegir el mejor modelo en función de los criterios AIC y BIC
+print("El mejor modelo en función del AIC es:" )
+print(rownames(arreglo)[which.min(arreglo[, 1])])
+# mostrar la call del mejor modelo
+print(get(rownames(arreglo)[which.min(arreglo[, 1])]))
+print("El mejor modelo en función del BIC es:" )
+print(rownames(arreglo)[which.min(arreglo[, 2])])
+# mostrar la call del mejor modelo
+print(get(rownames(arreglo)[which.min(arreglo[, 2])]))
 
 ```
 <br>
@@ -357,13 +380,19 @@ BIC(model_gorr)
 ```{r,echo=TRUE}
 #install.packages("aod")
 library(aod)
+S(model_gorr)
+wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 2:3)#(Incorrecto) compara cabeza y pata-> Rechaza que al menos uno de los coef es 0
+# Correcto sería: Alas y Cabeza 
+wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 3:4)#(Correcto) compara cabeza y pata
 
-wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 2:3)#compara cabeza y pata-> Rechaza que al menos uno de los coef es 0
-wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 1)#compara Alas-> NO Rechaza que el coef es 0
-wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 2)#compara Cabeza-> Rechaza que el coef es 0
-wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 3)#compara Pata -> NO rechaza que el coef es 0
-wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 4)#compara Cuerpo-> NO rechaza que el coef es 0
+wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 1)#compara Término independiente-> NO Rechaza que el coef es 0
+wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 2)#compara Alas-> Rechaza que el coef es 0
+wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 3)#compara Cabeza -> NO rechaza que el coef es 0
+wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 4)#compara Pata-> NO rechaza que el coef es 0
+wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 5)#compara Cuerpo-> rechaza que el coef es 0
 
+wald.test(Sigma = vcov(model_gorr), b = coef(model_gorr), Terms = 2:5)
+S(model_gorr)
 ```
 **Observación: **Hay diferencias entre el resultado obtenido en la significación del
 coef. de Cuerpo en el modelo (se ve que es significativo) y la significancia 
@@ -390,8 +419,9 @@ confint(model_gorr)#por default el nivel es 0.95
 ggplot(data = gorr, mapping = aes(x = Alas, y = Largo)) + 
   geom_point(color = "firebrick", size = 2) + 
   labs(title = "Largo ~ Alas", x = "Alas") + 
-  geom_smooth(method = "lm", se = FALSE, color = "black") + 
+  geom_smooth(method = "lm", se = TRUE, color = "black") + 
   theme_bw() + theme(plot.title = element_text(hjust = 0.5))
+
 
 ```
 <br>
@@ -404,11 +434,13 @@ Genero nuevos datos en el rango de X.
 
 
 nuevosdatos <- seq(from = min(gorr$Alas), to = max(gorr$Alas), length.out = 100) 
-
+nuevosdatos
 ```
 <br>
 Predigo Largos de nuevos valores de Alas.
 ```{r,echo=TRUE}
+S(model_gorr1)
+pepe <- data.frame(Alas = nuevosdatos)
 predict(object = model_gorr1, newdata = data.frame(Alas = nuevosdatos))
 ```
 <br>
@@ -422,6 +454,9 @@ Predigo Y y agrego su intervalo de confianza para cada uno de los nuevos datos g
 ```{r,echo=TRUE}
 intervalosConf <- predict(object = model_gorr1, newdata = data.frame(Alas = nuevosdatos), interval = "confidence", level = 0.95) 
 head(intervalosConf, 5)
+intervalosPred <- predict(object = model_gorr1, newdata = data.frame(Alas = nuevosdatos), interval = "prediction", level = 0.95) 
+head(intervalosPred, 5)
+
 ```
 <br>
 Armo el gráfico con las curvas de puntos de extremos superiores e inferiores de los intervalos.
@@ -435,7 +470,7 @@ lines(x = nuevosdatos, y = intervalosConf[, 3], type = "l", col = 3, lty = 3)
 ggplot(data = gorr, mapping = aes(x = Alas, y = Largo)) + 
   geom_point(color = "firebrick", size = 2) + 
   labs(title = "Largo vs Alas", x = "Alas") + 
-  geom_smooth(method = "lm", se = TRUE, color = "black") + theme_bw() + 
+  geom_smooth(method = "lm", se = FALSE, color = "black") + theme_bw() + 
   theme(plot.title = element_text(hjust = 0.5)) 
 # Por defecto incluye la región de 95% de confianza
 
@@ -453,6 +488,7 @@ ggplot(data = gorr, mapping = aes(x = Alas, y = Largo)) +
 
 #Analizamos si los residuos son normales 
 gorr2<-gorr
+gorr2
 gorr2$prediccion <- model_gorr1$fitted.values 
 gorr2$residuos <- model_gorr1$residuals
 
@@ -462,7 +498,9 @@ ggplot(data = gorr2, aes(x = residuos)) + geom_histogram(aes(y = ..density..)) +
 
 qqnorm(model_gorr1$residuals) 
 qqline(model_gorr1$residuals)
+qqPlot(model_gorr1$residuals)
 
+# Test de Shapiro Wilk
 shapiro.test(model_gorr1$residuals)
 
 ```
