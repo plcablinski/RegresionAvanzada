@@ -40,6 +40,7 @@ nassets: activos netos,
 stfees: cuotas de los estudiantes.
 
 ```{r, echo=TRUE}
+rm(list=ls())
 #install.packages("Ecdat")
 library(Ecdat)
 data(University)
@@ -52,11 +53,17 @@ cor(University$nassets,University$stfees)^2# Observar que coincide con R^2 del m
 
 library(car)
 library(lmtest)
-
+library(ggplot2)
 plot(University$stfees,University$nassets,xlab="stfees",ylab="nassets",
      main="stfees vs nassets")
 
 abline(linMod,col="darkviolet",lwd=2)
+# Con ggplot graficar un diagrama de dispersión con la recta de regresión
+ggplot(data = University, mapping = aes(x = stfees, y = nassets)) +
+     geom_point(color = "firebrick", size = 2) +
+     labs(title = "Diagrama de dispersión con recta de regresión", x = "stfees") +
+     geom_smooth(method = "lm", se = TRUE, color = "black") +
+     theme_bw() + theme(plot.title = element_text(hjust = 0.5))
 ```
 <br>
 
@@ -78,6 +85,8 @@ Se rechaza normalidad y homocedasticidad.
 ```{r, echo=TRUE}
 library(MASS)
 boxcox(nassets ~ stfees, lambda = -2:2, data = University)
+boxCox(object = linMod, plotit = TRUE)
+summary(powerTransform(linMod))
 ```
 <br>
 Observemos que, según el gráfico, el lambda óptimo se encuentra cerca de 0. Entonces consideraremos la transformación logarítmica sobre la variable respuesta.
@@ -86,11 +95,23 @@ Observemos que, según el gráfico, el lambda óptimo se encuentra cerca de 0. E
 linMod2 <- lm(log10(nassets) ~ stfees, data = University)
 summary(linMod2)
 
+linMod3 <- lm(nassets**0.33 ~ stfees, data = University)
+summary(linMod3)
+
+# Gráficos dos modelos
+par(mfrow=c(1,2))
+
 plot(University$stfees,log10(University$nassets),xlab="stfees",ylab="log10(nassets)",
      main="stfees vs log10(nassets)")
 
 abline(linMod2,col="darkviolet",lwd=2)
 
+plot(University$stfees,University$nassets**0.33,xlab="stfees",ylab="nassets^0.33",
+     main="stfees vs nassets^0.33")
+
+abline(linMod3,col="blue",lwd=2)
+
+par(mfrow=c(1,1))
 ```
 <br>
 Realizamos el análisis diagnóstico.
@@ -99,6 +120,12 @@ shapiro.test(linMod2$residuals)
 bptest(linMod2)
 
 dwt(linMod2)
+
+shapiro.test(linMod3$residuals)
+bptest(linMod3)
+
+dwt(linMod3)
+
 ```
 En este caso se vuelve a rechazar normalidad de los residuos. Probamos aplicar la transformación logarítmica a la covariable stfees, y rehacemos el gráfico de Box y Cox. 
 
@@ -125,7 +152,10 @@ dwt(linMod2a)
 
 En este caso se rechaza normalidad, analizamos si se puede aplicar una transformación de Box y Cox conveniente.
 ```{r, echo=TRUE}
+linMod2b <- lm(nassets ~ log10(stfees), data = University)
 boxcox(nassets ~ log10(stfees), lambda = -2:2, data = University)#lambda cerca de 0
+boxCox(object = linMod2b, plotit = TRUE)
+summary(powerTransform(linMod2b))
 ```
 <br>
 Nuevamente, el gráfico sugiere aplicar a la variable respuesta la transformación logarítmica.
@@ -158,7 +188,7 @@ Graficamos ambas bandas de confianza y predicción para el modelo original.
 ICcompleto<-predict(linMod, interval="confidence",level=0.95)
 IPcompleto<-predict(linMod,newdata=data.frame(stfees=University$stfees), interval="prediction",level=0.95)
 datos<-data.frame(stfees=University$stfees,nassets=University$nassets,IPcompleto)             
-
+datos
 library(ggplot2)
 ggplot(data = datos, mapping = aes(x = stfees, y = nassets)) + 
   geom_point(color = "firebrick", size = 2) + 
@@ -270,6 +300,8 @@ which(lev>2*p/n)
 #distancias de cook
 dcook<-cooks.distance(linMod)
 influenceIndexPlot(linMod, vars='Cook', las=1,col='blue')
+# Hacer un influenceIndexPlot y mostrar los 4 valores más altos
+influenceIndexPlot(linMod) 
 
 which(dcook>4/n)
 hist(dcook)
@@ -287,9 +319,8 @@ which(dcook>corted)
 
 Construimos dos vectores de pesos para evaluar cuadrados mínimos ponderados.
 ```{r, echo=TRUE}
-ww<-1 / lm(abs(linMod$residuals) ~ linMod$fitted.values)$fitted.values^2
-www<-1 / (abs(linMod$residuals))#^2
-
+ww  <- 1 / lm(abs(linMod$residuals) ~ linMod$fitted.values)$fitted.values^2
+www <- 1 / (abs(linMod$residuals)) #^2
 
 plot(University$stfees,University$nassets,xlab="stfees",ylab="nassets",
      main="stfees vs nassets", ylim=c(0,200000))
