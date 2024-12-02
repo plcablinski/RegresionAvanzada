@@ -319,6 +319,8 @@ which(dcook>corted)
 
 Construimos dos vectores de pesos para evaluar cuadrados mínimos ponderados.
 ```{r, echo=TRUE}
+library(car)
+library(lmtest)
 ww  <- 1 / lm(abs(linMod$residuals) ~ linMod$fitted.values)$fitted.values^2
 www <- 1 / (abs(linMod$residuals)) #^2
 
@@ -331,5 +333,29 @@ linMod_ww<- lm(nassets ~ stfees, data = University,weights =ww)
 linMod_www<- lm(nassets ~ stfees, data = University,weights =www)
 abline(linMod_ww,col="hotpink",lwd=2)
 abline(linMod_www,col="gold",lwd=2)
+
+S(linMod)
+S(linMod_ww)
+S(linMod_www)
+
+# Validacion de supuestos para cada modelo
+shapiro.test(linMod$residuals)
+bptest(linMod)
+# Durbin Watson test
+dwt(linMod)
+
+
+shapiro.test(linMod_ww$residuals)
+bptest(linMod_ww)
+# Durbin Watson test
+dwt(linMod_ww)
+
+# Validacion de supuestos para cada modelo
+shapiro.test(linMod_www$residuals)
+bptest(linMod_www)
+# Durbin Watson test
+dwt(linMod_www)
+
+
 ```
 <br>

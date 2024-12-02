@@ -1,0 +1,569 @@
+---
+title: "Modelo Lineal Multivariado - Clase 3"
+author: "Cecilia Oliva"
+date: "21/05/2024"
+output:
+   html_document:
+     toc: yes
+     code_folding: show
+     toc_float: yes
+     df_print: paged
+     theme: united
+     code_download: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<br>
+<br>
+
+# Modelo lineal mulivariado
+
+<br>
+
+## <span style="color:darkred">Modelo aditivo</span>
+
+<br>
+
+### Ejemplo de pesos de recién nacidos
+
+<br>
+Analizamos los siguientes datos que corresponden a mediciones de 100 niños nacidos con bajo peso (es decir, con menos de 1500 g.) en Boston, Massachusetts.
+
+Las variables que usaremos son:
+
+headcirc: es el perímetro cefálico (medido en cm.) de un bebé recién nacido con bajo peso,
+
+gestage: es la edad gestacional o duración de la gestación del i-ésimo bebé de bajo peso,
+
+birthwt: es el peso al nacer del i-ésimo niño, en gramos.
+
+```{r, echo=TRUE}
+rm(list = ls())
+file<-"low birth weight infants.txt"
+setwd("C:/RegresionAvanzada/Clase_3")
+data <- read.table(file = file, header = TRUE)
+head(data)
+names(data)
+dim(data)
+
+summary(data$headcirc)
+```
+<br>
+Ajustamos el perímetro cefálico, mediante un modelo lineal, a las covariables de edad gestacional y de peso al nacer.
+
+```{r, echo=TRUE}
+
+model_lin_adi<-lm(headcirc ~ gestage+birthwt, data = data)
+summary(model_lin_adi)
+```
+<br>
+Generamos nuevos valores de las variables y obtenemos la predicción del perímetro cefálico para esos nuevos datos.
+
+```{r, echo=TRUE}
+
+rango_gestage <- range(data$gestage)
+nuevos_valores_gestage <- seq(from = rango_gestage[1], to = rango_gestage[2], length.out = 20) 
+nuevos_valores_gestage
+rango_birthwt <- range(data$birthwt) 
+nuevos_valores_birthwt <- seq(from = rango_birthwt[1], to = rango_birthwt[2], length.out = 20)
+predicciones <- outer(X = nuevos_valores_gestage, Y = nuevos_valores_birthwt, FUN = function(gestage, birthwt) {predict(object = model_lin_adi, newdata = data.frame(gestage, birthwt)) })
+predicciones
+superficie <- persp(x = nuevos_valores_gestage, y = nuevos_valores_birthwt, z = predicciones, theta = 18, phi = 20, col = "lightblue", shade = 0.1, xlab = "gestage", ylab = "birthwt", zlab = "headcirc", ticktype = "detailed", main = "Predición headcirc ~ gestage y birthwt")
+observaciones <- trans3d(data$gestage, data$birthwt, data$headcirc, superficie) 
+error <- trans3d(data$gestage, data$birthwt, fitted(model_lin_adi), superficie) 
+points(observaciones, col = "red", pch = 16)
+segments(observaciones$x, observaciones$y, error$x, error$y)
+```
+
+<br>
+
+## <span style="color:darkred">Modelos lineales robustos</span>
+
+<br>
+
+### Mismo ejemplo anterior de datos de niños de bajo peso al nacer
+
+<br>
+
+Probamos un modelo robusto sobre el modelo lineal completo, usando todas las variables continuas, y otro usando sólo las más significativas.
+
+```{r, echo=TRUE}
+library(robustbase)
+?? robustbase
+head(data)
+# Convertir toxemia en factor
+data$toxemia <- as.factor(data$toxemia)
+ajusterob <- lmrob(headcirc ~ ., data = data)
+summary(ajusterob)
+
+ajusterob2 <- lmrob(headcirc ~ gestage+birthwt, data = data)
+summary(ajusterob2)
+```
+<br>
+
+Probamos otros modelos robustos usando las funciones de Huber y bicuadrada.
+
+```{r, echo=TRUE}
+library(MASS)
+rob_mod_lin_adi_huber<-rlm(headcirc ~ gestage+birthwt, data = data,psi = psi.huber)#psi.huber por default
+summary(rob_mod_lin_adi_huber)
+
+rob_mod_lin_adi_biscuad<-rlm(headcirc ~ gestage+birthwt, data = data,psi = psi.bisquare)
+summary(rob_mod_lin_adi_biscuad)
+```
+
+Observar que disminuye el error estándar residual en el último modelo.
+
+<br>
+
+## <span style="color:darkred">Análisis de multicolinealidad</span>
+
+<br>
+
+### Ejemplo de índice de masa corporal infantil
+
+<br>
+```{r, echo=TRUE}
+library(readxl)
+IMCinfantil<-read_excel("IMCinfantil.xlsx")
+dim(IMCinfantil)#150 9
+
+head(IMCinfantil)
+
+attach(IMCinfantil) # carga la base en la memoria activa
+base.ninios=data.frame(EDAD,PESO,TALLA,IMC,CC) # arma una sub-base con las variables numéricas de IMCinfantil
+```
+<br>
+
+Aplicamos un modelo lineal múltiple para estimar IMC.
+```{r, echo=TRUE}
+ajusteL <- lm(IMC ~ ., data = base.ninios)
+summary(ajusteL)
+
+```
+<br>
+
+Calculamos el VIF (valor de inflación de la varianza) de cada variable.
+
+```{r, echo=TRUE}
+library(car)
+library(olsrr)
+library(performance)
+car::vif(ajusteL)
+ols_coll_diag(ajusteL)
+check_collinearity(ajusteL)
+```
+
+**Observación**: notar que la única variable no significativa es la que no tiene alto VIF (alto VIF es mayor a 5).
+
+Probamos eliminar la variable que tiene VIF superior (PESO), recordar además 
+que PESO y CC tienen alta correlación=0.92, conviene más aún sacar entonces PESO.
+```{r, echo=TRUE}
+ajusteLin <- lm(IMC ~ EDAD+TALLA+CC, data = base.ninios)
+summary(ajusteLin)
+```
+
+<br>
+
+Calculamos nuevamente el VIF de cada variable.
+
+
+```{r, echo=TRUE}
+
+car::vif(ajusteLin)
+
+```
+Ya no se observan valores muy altos de VIF, por lo que no parece haber multicolinealidad.
+
+<br>
+
+## <span style="color:darkred">Regresión polinómica</span>
+
+<br>
+
+Retomamos el ejemplo de los pesos de bebés al nacer. Ajustamos el perímetro cefálico, mediante un modelo lineal, a las covariables de edad gestacional y de peso al nacer. 
+
+```{r, echo=TRUE}
+
+model_lin_adi<-lm(headcirc ~ gestage+birthwt, data = data)
+summary(model_lin_adi)
+```
+<br>
+
+Ajustamos ahora a través de un polinomio de orden 2 sobre la variable gestage.
+```{r, echo=TRUE}
+
+model_poly2 <- lm(formula = headcirc ~ gestage + I(gestage^2), data = data)
+summary(model_poly2)
+model_poly2bis <- lm(formula = headcirc ~ poly(gestage, 2), data = data) 
+summary(model_poly2bis)
+model_poly2bis0 <- lm(formula = headcirc ~ poly(gestage, 2,raw=TRUE), data = data) 
+summary(model_poly2bis0)#da lo mismo que el poly2
+```
+
+**Observar** que el tercer modelo es igual al primero.
+
+<br>
+
+Nuevamente aplicamos una regresión polinomial de orden 2, agregando la variable birthwt.
+
+```{r, echo=TRUE}
+
+model_poly2_comp <- lm(formula = headcirc ~ gestage + I(gestage^2)+birthwt + I(birthwt^2), data = data)
+summary(model_poly2_comp)
+model_poly2_comp_bis <- lm(formula = headcirc ~ poly(gestage,2)+poly(birthwt,2), data = data)
+summary(model_poly2_comp_bis)
+
+model_poly2_comp_bis0 <- lm(formula = headcirc ~ poly(gestage,2,raw=TRUE)+poly(birthwt,2,raw=TRUE), data = data)
+summary(model_poly2_comp_bis0)#da lo mismo que el poly2_com
+```
+
+**Observar** que el tercer modelo es igual al primero.
+
+<br>
+
+El siguiente modelo agrega la interacción entre gestage y birthwt.
+
+```{r, echo=TRUE}
+model_poly2_comp_bis2 <- lm(formula = headcirc ~ poly(gestage,2)+poly(birthwt,2) + I(gestage*birthwt), data = data)
+summary(model_poly2_comp_bis2)
+
+```
+<br>
+
+**Importante**: notar que al dejar raw=FALSE (por defecto) R considera polinomios ortogonales, y eso hace que las distintas potencias de la variable no queden correlacionadas, lo que resulta más claro para entender cuánto aporta considerar una potencia más grande cada vez.
+
+
+<br>
+
+## <span style="color:darkred">Selección de variables</span>
+
+```{r, echo=TRUE}
+#NO puede haber datos faltantes para aplicar lo que sigue:
+library(leaps) 
+mejores_modelos <- regsubsets(headcirc ~ ., data = data, nvmax = 5) 
+mejores_modelos_todas <- regsubsets(headcirc ~ ., data = data) 
+mejores_modelos
+mejores_modelos_todas
+```
+<br>
+
+El argumento nvmax determina el tamaño máximo de los modelos a inspeccionar. Si se quiere realizar best subset selection evaluando todos los posibles modelos, nvmax tiene que ser igual al número de variables disponibles.
+
+<br>
+
+```{r, echo=TRUE}
+summary(mejores_modelos)
+
+names(summary(mejores_modelos))
+
+summary(mejores_modelos)$adjr2
+
+# se identifica qué modelo tiene el valor máximo de R ajustado 
+which.max(summary(mejores_modelos)$adjr2)
+
+
+library(ggplot2) 
+p <- ggplot(data = data.frame(n_predictores = 1:5, R_ajustado = summary(mejores_modelos)$adjr2), aes(x = n_predictores, y = R_ajustado)) + 
+  geom_line() + 
+  geom_point() 
+# Se identifica en rojo el máximo 
+p <- p + geom_point(aes(x=n_predictores[which.max(summary(mejores_modelos)$adjr2)], y=R_ajustado[which.max(summary(mejores_modelos)$adjr2)]), colour = "red", size = 3) 
+p <- p + scale_x_continuous(breaks = c(0:5)) + theme_bw() + 
+  labs(title = "R2_ajustado vs número de predictores", x = "número predictores") 
+p
+
+coef(object = mejores_modelos, id = 4)
+```
+<br>
+
+### Backward
+
+```{r, echo=TRUE}
+library(leaps) 
+mejores_modelos_backward <- regsubsets(headcirc ~ ., data = data, nvmax = 5, method = "backward") 
+# se identifica el valor máximo de R ajustado 
+which.max(summary(mejores_modelos_backward)$adjr2)
+
+coef(object = mejores_modelos_backward, 4)
+```
+
+<br>
+
+### Forward
+
+```{r, echo=TRUE}
+mejores_modelos_forward <- regsubsets(headcirc ~ ., data = data, nvmax = 5, method = "forward") 
+# se identifica el valor máximo de R ajustado 
+which.max(summary(mejores_modelos_forward)$adjr2)
+
+coef(object = mejores_modelos_forward, 4)
+
+```
+<br>
+
+### Todas las combinaciones de modelos
+
+```{r, warning=FALSE}
+library(olsrr)
+lm.fit1 <- lm(headcirc ~ ., data = data)
+k <- ols_step_all_possible(lm.fit1)
+
+
+# AIC: Akaike Information Criteria 
+# SBIC: Sawa's Bayesian Information Criteria 
+# SBC: Schwarz Bayesian Criteria 
+# MSEP: Estimated error of prediction, assuming multivariate normality 
+# FPE: Final Prediction Error 
+# HSP: Hocking's Sp 
+# APC: Amemiya Prediction Criteria
+
+k # OJO: en RStudio se ven menos columnas en la salida
+
+plot(k)# el eje horizontal representa la cantidad de variables utilizadas en cada modelo.
+```
+
+Se ve que el sexto sería uno de los mejores modelos.
+
+<br>
+
+Selecciona el subconjunto de predictores que alcanzan mayor R2 o menor MSE, Mallow’s Cp o AIC, etc.
+
+```{r, echo=TRUE}
+k_best <- ols_step_best_subset(lm.fit1, metric = "msep")
+
+# AIC: Akaike Information Criteria 
+# SBIC: Sawa's Bayesian Information Criteria 
+# SBC: Schwarz Bayesian Criteria 
+# MSEP: Estimated error of prediction, assuming multivariate normality 
+# FPE: Final Prediction Error 
+# HSP: Hocking's Sp 
+# APC: Amemiya Prediction Criteria
+
+k_best
+
+plot(k_best)# el eje horizontal representa la cantidad de variables utilizadas en cada modelo.
+```
+
+El mejor se puede ver que es el segundo, coincide con el análisis anterior.
+
+<br>
+
+## <span style="color:darkred">Validación cruzada</span>
+
+<br>
+
+### Validación simple
+
+<br>
+
+Para la validación utilizaremos como muestra de entrenamiento el 66% de las observaciones seleccionadas aleatoriamente. El 34% restante se reservará para la muestra de test.
+
+```{r, echo=TRUE}
+set.seed(1) 
+
+
+train <- sample(x = 1:100, size = 67, replace = FALSE) 
+
+mejores_modelos <- regsubsets(headcirc ~ ., data = data[train,], nvmax = 5,method = "forward") 
+coef(object = mejores_modelos, 4)
+
+
+# Se genera un vector que almacenará el test-error de cada modelo 
+validation_error <- rep(NA, 5)
+validation_error
+```
+
+La función model.matrix() devuelve una matriz formada con los predictores indicados en la fórmula e introduce para todas las observaciones un intercept con valor 1, así al multiplicar por los coeficientes se obtiene el valor de la predicción.
+
+```{r, echo=TRUE}
+test_matrix <- model.matrix(headcirc ~ ., data = data[-train,]) 
+test_matrix
+# Para cada uno de los modelos almacenados en la variable mejores modelos: 
+for (i in 1:5) { 
+  # Se extraen los coeficientes del modelo 
+  coeficientes <- coef(object = mejores_modelos, id = i) 
+  # Se identifican los predictores que forman el modelo y se extraen de la 
+  # matriz modelo 
+  predictores <- test_matrix[, names(coeficientes)] 
+  # Se obtienen las predicciones mediante el producto matricial de los 
+  # predictores extraídos y los coeficientes del modelo 
+  predicciones <- predictores %*% coeficientes 
+  # Finalmente se calcula la estimación del test error como el promedio de los 
+  # residuos al cuadrado (MSE) 
+  validation_error[i] <- mean((data$headcirc[-train] - predicciones)^2) } 
+which.min(validation_error)
+
+```
+<br>
+
+Graficamos los errores en función del número de covariables (predictores).
+
+```{r, echo=TRUE}
+p <- ggplot(data = data.frame(n_predictores = 1:5, Estimacion_MSE = validation_error), aes(x = n_predictores, y = Estimacion_MSE)) + 
+  geom_line() + 
+  geom_point() 
+# Se identifica en rojo el mínimo 
+p <- p + geom_point(aes(x = n_predictores[which.min(validation_error)], y = validation_error[which.min(validation_error)]), colour = "red", size = 3) 
+p <- p + scale_x_continuous(breaks = c(0:5)) + 
+  labs(title = "MSE vs número de predictores", x = "número predictores") + 
+  theme_bw() 
+p
+
+```
+
+Marca en rojo el 4, que es el de mínimo error estimado.
+
+<br>
+
+### Validación cruzada (CV)
+
+La validación simple tiene la desventaja de sufrir mucha varianza, es decir, las estimaciones del error pueden variar mucho según cómo sean las muestras de entrenamiento y test. Es por eso que se utiliza el método de validación cruzada (K-Cross-Validation), el cual consiste en dividir el conjunto de observaciones en k grupos de tamaño similar.
+
+A continuación se muestra un ejemplo considerando k=10.
+
+```{r, echo=TRUE}
+set.seed(11) 
+# Sample() mezcla aleatoriamente las posiciones. 
+# Es importante que la asignación sea aleatoria. 
+grupo <- sample(rep(x = 1:10, length = nrow(data))) 
+# Se comprueba que la distribución es aproximadamente equitativa 
+table(grupo)
+ 
+
+predict.regsubsets <- function(object, newdata, id, ...) { 
+  # Extraer la fórmula del modelo (variable dependiente ~ predictores) 
+  form <- as.formula(object$call[[2]]) 
+  # Generar una matriz modelo con los nuevos datos y la fórmula 
+  mat <- model.matrix(form, newdata) 
+  # Extraer los coeficientes del modelo 
+  coefi <- coef(object, id = id) 
+  # Almacenar el nombre de las variables predictoras del modelo 
+  xvars <- names(coefi) 
+  # Producto matricial entre los coeficientes del modelo y los valores de los 
+  # predictores de las nuevas observaciones para obtener las predicciones 
+  mat[, xvars] %*% coefi }
+
+error_matrix <- matrix(data = NA, nrow = 10, ncol = 5, dimnames = list(NULL, c(1:5))) 
+# Loop en el que se excluye en cada iteración un grupo distinto 
+# ESTE LOOP ESTA HECHO PARA UN DATA FRAME CON 5 PREDICTORES 
+num_validaciones <- 10 
+num_predictores <- 5 
+for (k in 1:num_validaciones) { 
+  # Identificación de datos empleados como training 
+  train <- data[grupo != k, ] 
+  # Selección de los mejores modelos para cada tamaño basándose en RSS 
+  mejores_modelos <- regsubsets(headcirc ~ ., data = train, nvmax = 5, method = "forward") 
+  # Para cada uno de los modelos 'finalistas' se calcula el test-error con el 
+  # grupo excluido 
+  for (i in 1:num_predictores) { 
+    test <- data[grupo == k, ] 
+    # Las predicciones del modelo i almacenado en el objeto regsubsets se 
+    # extraen mediante la función predict.regsubsets() definida arriba 
+    predicciones <- predict.regsubsets(object = mejores_modelos, newdata = test, id = i) 
+    # Cálculo y almacenamiento del MSE para el modelo i 
+    error_matrix[k, i] <- mean((test$headcirc - predicciones)^2) } } 
+# Cada columna de la matriz error_matrix contiene los 10 valores de error 
+# calculados por cv 
+mean_cv_error <- apply(X = error_matrix, MARGIN = 2, FUN = mean) 
+# plot(sqrt(mean_cv_error), type = 'b', pch = 19) 
+which.min(x = mean_cv_error)
+```
+<br>
+
+Graficamos los errores.
+
+```{r, echo=TRUE}
+ggplot(data = data.frame(n_predictores = 1:5, mean_cv_error = mean_cv_error), aes(x = n_predictores, y = mean_cv_error)) + 
+  geom_line() + geom_point() + 
+  geom_point(aes(x = n_predictores[which.min(mean_cv_error)], y = mean_cv_error[which.min(mean_cv_error)]), colour = "red", size = 3) + 
+  scale_x_continuous(breaks = c(0:5)) + theme_bw() + 
+  labs(title = "Error medio bajo validación cruzada vs número de predictores", x = "número predictores")
+```
+<br>
+
+Se identifica el mejor modelo formado por 2 predictores empleando todas las 
+observaciones (training + test).
+
+```{r, echo=TRUE}
+modelo_final <- regsubsets(headcirc ~ ., data = data, nvmax = 5, method ="forward") 
+coef(object = modelo_final, 2)
+
+```
+
+Notar que siempre lo más conveniente es elegir la mínima cantidad de predictores tales que se observa una disminución significativa del error cuadrático medio (ECM/MSE); y no necesariamente coincide con el k tal que MSE es mínimo como se observa en este caso (Principio de parsimonia).
+
+<br>
+
+
+## <span style="color:darkred">CV usando paquete Caret</span>
+
+## Validación simple
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+library(tidyverse)# paquete de visualización y manipulación  de datos
+
+#install.packages("caret")
+library(caret) #paquete para computar directamente CV
+
+set.seed(2022)
+
+# Entrenamos con el 67% de los datos
+random_sample <- createDataPartition(data$headcirc,p = 0.67, list = FALSE)
+random_sample
+training_dataset <- data[random_sample, ]
+testing_dataset <- data[-random_sample, ]
+
+model1 <- lm(headcirc ~., data = training_dataset)
+
+predictions1 <- predict(model1, testing_dataset)
+
+# Métricas de performance
+data.frame( R2 = R2(predictions1, testing_dataset $ headcirc),
+            RMSE = RMSE(predictions1, testing_dataset $ headcirc),
+            MAE = MAE(predictions1, testing_dataset $ headcirc))
+
+```
+
+<br>
+
+## Leave one out cross validation (LOOCV)
+
+
+```{r, echo=TRUE}
+set.seed(12345)
+train_control2 <- trainControl(method = "LOOCV")
+model2 <- train(headcirc ~., data = data,method = "lm",trControl = train_control2)
+print(model2)
+
+```
+
+<br>
+
+## K-fold cross-validation
+
+
+```{r, echo=TRUE}
+set.seed(12345)
+train_control3 <- trainControl(method = "cv",number = 10)
+model3 <- train(headcirc ~., data = data,method = "lm",trControl = train_control3)
+print(model3)
+
+```
+
+<br>
+
+## Repeated K-fold cross-validation
+
+
+```{r, echo=TRUE}
+set.seed(12345)
+train_control4 <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+model4 <- train(headcirc ~., data = data, method = "lm",trControl = train_control4)
+print(model4)
+
+```
+
