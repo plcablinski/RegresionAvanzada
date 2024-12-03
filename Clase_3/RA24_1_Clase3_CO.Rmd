@@ -91,8 +91,8 @@ segments(observaciones$x, observaciones$y, error$x, error$y)
 Probamos un modelo robusto sobre el modelo lineal completo, usando todas las variables continuas, y otro usando sólo las más significativas.
 
 ```{r, echo=TRUE}
+#install.packages('robustbase')
 library(robustbase)
-?? robustbase
 head(data)
 # Convertir toxemia en factor
 data$toxemia <- as.factor(data$toxemia)
@@ -127,6 +127,7 @@ Observar que disminuye el error estándar residual en el último modelo.
 
 <br>
 ```{r, echo=TRUE}
+#install.packages('readxl')
 library(readxl)
 IMCinfantil<-read_excel("IMCinfantil.xlsx")
 dim(IMCinfantil)#150 9
@@ -149,8 +150,11 @@ summary(ajusteL)
 Calculamos el VIF (valor de inflación de la varianza) de cada variable.
 
 ```{r, echo=TRUE}
+options(width = 120)
 library(car)
 library(olsrr)
+#install.packages('olsrr')
+#install.packages('performance')
 library(performance)
 car::vif(ajusteL)
 ols_coll_diag(ajusteL)
@@ -164,6 +168,7 @@ que PESO y CC tienen alta correlación=0.92, conviene más aún sacar entonces P
 ```{r, echo=TRUE}
 ajusteLin <- lm(IMC ~ EDAD+TALLA+CC, data = base.ninios)
 summary(ajusteLin)
+check_collinearity(ajusteLin)
 ```
 
 <br>
@@ -243,6 +248,7 @@ summary(model_poly2_comp_bis2)
 
 ```{r, echo=TRUE}
 #NO puede haber datos faltantes para aplicar lo que sigue:
+#install.packages('leaps')
 library(leaps) 
 # utilizar como criterio el R^2 ajustado
 mejores_modelos <- regsubsets(headcirc ~ ., data = data,nvmax = 5, method = "exhaustive", really.big = TRUE)
@@ -368,8 +374,8 @@ Para la validación utilizaremos como muestra de entrenamiento el 66% de las obs
 ```{r, echo=TRUE}
 set.seed(1) 
 
-
 train <- sample(x = 1:100, size = 67, replace = FALSE) 
+train
 
 mejores_modelos <- regsubsets(headcirc ~ ., data = data[train,], nvmax = 5,method = "forward") 
 coef(object = mejores_modelos, 4)
@@ -507,6 +513,8 @@ Notar que siempre lo más conveniente es elegir la mínima cantidad de predictor
 ## Validación simple
 
 ```{r, echo=TRUE, message=FALSE, warning=FALSE}
+#install.packages('caret')
+#install.packages('tidyverse') 
 library(tidyverse)# paquete de visualización y manipulación  de datos
 
 #install.packages("caret")
@@ -519,15 +527,19 @@ random_sample <- createDataPartition(data$headcirc,p = 0.67, list = FALSE)
 random_sample
 training_dataset <- data[random_sample, ]
 testing_dataset <- data[-random_sample, ]
+testing_dataset
 
 model1 <- lm(headcirc ~., data = training_dataset)
-
+summary(model1)
 predictions1 <- predict(model1, testing_dataset)
-
+predictions1
 # Métricas de performance
-data.frame( R2 = R2(predictions1, testing_dataset $ headcirc),
-            RMSE = RMSE(predictions1, testing_dataset $ headcirc),
-            MAE = MAE(predictions1, testing_dataset $ headcirc))
+data.frame( RMSE = RMSE( testing_dataset $ headcirc, predictions1),
+            R2 = R2(testing_dataset $ headcirc, predictions1 ),
+            MAE = MAE( testing_dataset $ headcirc, predictions1 ))
+
+# Evaluar el rendimiento del modelo
+postResample(predictions1, testing_dataset$headcirc)
 
 ```
 
@@ -541,6 +553,7 @@ set.seed(12345)
 train_control2 <- trainControl(method = "LOOCV")
 model2 <- train(headcirc ~., data = data,method = "lm",trControl = train_control2)
 print(model2)
+summary(model2)
 
 ```
 
