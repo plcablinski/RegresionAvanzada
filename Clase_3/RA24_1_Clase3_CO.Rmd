@@ -520,26 +520,38 @@ library(tidyverse)# paquete de visualización y manipulación  de datos
 #install.packages("caret")
 library(caret) #paquete para computar directamente CV
 
-set.seed(2022)
+# modelo completo
+# Entrenar el modelo
+modelo_completo <- lm(headcirc ~ ., data = data)
+  
+# Hacer predicciones
+predictions_completas <- predict(modelo_completo, data)
 
-# Entrenamos con el 67% de los datos
-random_sample <- createDataPartition(data$headcirc,p = 0.67, list = FALSE)
-random_sample
-training_dataset <- data[random_sample, ]
-testing_dataset <- data[-random_sample, ]
-testing_dataset
-
-model1 <- lm(headcirc ~., data = training_dataset)
-summary(model1)
-predictions1 <- predict(model1, testing_dataset)
-predictions1
-# Métricas de performance
-data.frame( RMSE = RMSE( testing_dataset $ headcirc, predictions1),
-            R2 = R2(testing_dataset $ headcirc, predictions1 ),
-            MAE = MAE( testing_dataset $ headcirc, predictions1 ))
-
+  # Métricas de performance
+print(data.frame( RMSE = RMSE(predictions_completas, data$headcirc),
+                    R2 = R2(predictions_completas, data$headcirc),
+                    MAE = MAE(predictions_completas, data$headcirc)))
+  
 # Evaluar el rendimiento del modelo
-postResample(predictions1, testing_dataset$headcirc)
+metrics_completo <- postResample(predictions_completas, data$headcirc)
+print(metrics_completo)
+summary(modelo_completo)
+
+# Validación simple
+# Dividir el dataset en training y testing
+  random_sample <- createDataPartition(data$headcirc, p = 0.67, list = FALSE)
+  training_dataset <- data[random_sample, ]
+  testing_dataset <- data[-random_sample, ]
+  
+  # Entrenar el modelo
+  model1 <- lm(headcirc ~ ., data = training_dataset)
+  
+  # Hacer predicciones
+  predictions1 <- predict(model1, testing_dataset)
+ # Evaluar el rendimiento del modelo
+# Calcular métricas para model1 (usando la última iteración del bucle for)
+metrics_model1 <- postResample(predictions1, testing_dataset$headcirc)
+print(metrics_model1)
 
 ```
 
@@ -554,6 +566,9 @@ train_control2 <- trainControl(method = "LOOCV")
 model2 <- train(headcirc ~., data = data,method = "lm",trControl = train_control2)
 print(model2)
 summary(model2)
+# Calcular métricas para model2
+metrics_model2 <- model2$results[1, c("RMSE", "Rsquared", "MAE")]
+print(metrics_model2)
 
 ```
 
@@ -567,7 +582,9 @@ set.seed(12345)
 train_control3 <- trainControl(method = "cv",number = 10)
 model3 <- train(headcirc ~., data = data,method = "lm",trControl = train_control3)
 print(model3)
-
+# Calcular métricas para model3
+metrics_model3 <- model3$results[1, c("RMSE", "Rsquared", "MAE")]
+print(metrics_model3)
 ```
 
 <br>
@@ -580,6 +597,36 @@ set.seed(12345)
 train_control4 <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
 model4 <- train(headcirc ~., data = data, method = "lm",trControl = train_control4)
 print(model4)
-
+# Calcular métricas para model4
+metrics_model4 <- model4$results[1, c("RMSE", "Rsquared", "MAE")]
+print(metrics_model4)
+```
+```{r, echo=TRUE}
+set.seed(12345)
+train_control5 <- trainControl(method = "repeatedcv", number = 10, repeats = 10)
+model5 <- train(headcirc ~., data = data, method = "lm",trControl = train_control5)
+print(model5)
+# Calcular métricas para model4
+metrics_model5 <- model5$results[1, c("RMSE", "Rsquared", "MAE")]
+print(metrics_model5)
 ```
 
+
+
+```{r, echo=TRUE}
+options(width = 160)
+comparison <- data.frame(modelo = c("modelo_completo",
+                                    "validación_simple",
+                                    "LOOCV",
+                                    "K-fold",
+                                    "Repeated K-fold 3",
+                                    "Repeated K-fold 10"))
+
+# Agregar a comparison la Comparación de los modelos
+comparison$RMSE <- c(metrics_completo[1], metrics_model1[1], metrics_model2[1], metrics_model3[1], metrics_model4[1], metrics_model5[1])
+comparison$R2 <- c(metrics_completo[2], metrics_model1[2], metrics_model2[2], metrics_model3[2], metrics_model4[2], metrics_model5[2])
+comparison$MAE <- c(metrics_completo[3], metrics_model1[3], metrics_model2[3], metrics_model3[3], metrics_model4[3], metrics_model5[3])
+
+# Imprimir el data frame de comparación
+print(comparison)
+```
