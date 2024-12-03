@@ -244,10 +244,10 @@ summary(model_poly2_comp_bis2)
 ```{r, echo=TRUE}
 #NO puede haber datos faltantes para aplicar lo que sigue:
 library(leaps) 
-mejores_modelos <- regsubsets(headcirc ~ ., data = data, nvmax = 5) 
+# utilizar como criterio el R^2 ajustado
+mejores_modelos <- regsubsets(headcirc ~ ., data = data,nvmax = 5, method = "exhaustive", really.big = TRUE)
+mejores_modelos_3 <- regsubsets(headcirc ~ ., data = data, nvmax = 5, nbest=3) 
 mejores_modelos_todas <- regsubsets(headcirc ~ ., data = data) 
-mejores_modelos
-mejores_modelos_todas
 ```
 <br>
 
@@ -257,13 +257,16 @@ El argumento nvmax determina el tamaño máximo de los modelos a inspeccionar. S
 
 ```{r, echo=TRUE}
 summary(mejores_modelos)
+summary(mejores_modelos_3)
 
 names(summary(mejores_modelos))
 
 summary(mejores_modelos)$adjr2
+summary(mejores_modelos_3)$adjr2
 
 # se identifica qué modelo tiene el valor máximo de R ajustado 
 which.max(summary(mejores_modelos)$adjr2)
+which.max(summary(mejores_modelos_3)$adjr2)
 
 
 library(ggplot2) 
