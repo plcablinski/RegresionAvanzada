@@ -1,0 +1,583 @@
+---
+title: "GAMLSS, regresión de cuantiles y regresión logística - Clase 6"
+author: "Cecilia Oliva"
+date: "11/06/2024"
+output:
+   html_document:
+     toc: yes
+     code_folding: show
+     toc_float: yes
+     df_print: paged
+     theme: united
+     code_download: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<br>
+<br>
+
+# GAMLSS y regresión de cuantiles
+
+<br>
+
+## <span style="color:darkred">Ejemplo</span>
+
+<br>
+
+Una compañía encargada del suministro de energía eléctrica estudia la evolución del consumo eléctrico de todas las casas de una ciudad en función de la hora del día. La empresa debe de ser capaz de provisionar, en un momento dado, con hasta un 50% de electricidad extra respecto al promedio. Esto significa un máximo de 15 MWh. Estar preparado para suministrar este extra de energía implica gastos de personal y maquinaria, por lo que la compañía se pregunta si es necesario estar preparada para producir tal cantidad durante todo el día, o si, por lo contrario, podría evitarse durante algunas horas, ahorrando así gastos.
+
+<br>
+
+```{r, echo=TRUE}
+library(tidyverse) 
+set.seed(12345) 
+n <- 2000 
+x <- runif(min = 0, max = 24, n = n) %>% sort() #Simulación distribución uniforme en el rango x
+y <- rnorm( n, mean = 10, sd = 1 + 1.5*(4.8 < x & x < 7.2) + 4*(7.2 < x & x < 12) + 1.5*(12 < x & x < 14.4) + 2*(x > 16.8) )  #Simulación de distribución normal para y
+```
+
+<br>
+
+Calculamos los cuantiles 0,1 y 0,9, y luego graficamos la distribución de y, es decir de la variable respuesta consumo.
+
+```{r, echo=TRUE}
+cuantil_10 <- qnorm( p = 0.1, mean = 10, sd = 1 + 1.5*(4.8 < x & x < 7.2) + 4*(7.2 < x & x < 12) + 1.5*(12 < x & x < 14.4) + 2*(x > 16.8) ) 
+cuantil_90 <- qnorm( p = 0.9, mean = 10, sd = 1 + 1.5*(4.8 < x & x < 7.2) + 4*(7.2 < x & x < 12) + 1.5*(12 < x & x < 14.4) + 2*(x > 16.8) ) 
+datos <- data.frame(consumo = y, hora = x, cuantil_10, cuantil_90) 
+# No puede haber consumos negativos 
+datos <- datos %>% filter(consumo >= 0) 
+datos <- datos %>% mutate(dentro_intervalo = ifelse( consumo > cuantil_10 & consumo < cuantil_90, TRUE, FALSE ) )
+
+mean(datos$consumo)
+
+pp <- ggplot(data = datos, aes(x = consumo)) + geom_density(alpha = 0.7, fill = "gray20") + 
+  labs(title = "Distribución del consumo") + theme_bw()
+pp
+```
+<br>
+
+Observamos que la media es de aproximadamente 10 MWh. Graficamos la media y luego agregamos los cuantiles 0,1 y 0,9 para cada posición de x (hora) simulada.
+
+```{r, echo=TRUE}
+p <- ggplot() + 
+  geom_point( data = datos, aes(x = hora, y = consumo), alpha = 0.3, color = "gray20") + 
+  geom_line( data = datos, aes(x = hora , y = 10, color = "media"), linetype = "solid", size = 1) + 
+  scale_color_manual(name = "", breaks = c("media"), values = c("media" = "#FC4E07")) + 
+  labs(title = "Evolución del consumo eléctrico a lo largo del día", x = "Hora del día", y = "Consumo eléctrico (MWh)") + 
+  theme_bw() + theme(legend.position = "bottom", plot.title = element_text(face = "bold")) 
+p <- p + scale_x_continuous(breaks = seq(0, 24, 2), labels = seq(0, 24, 2)) 
+p
+```
+
+
+```{r, echo=TRUE}
+library(quantreg) 
+p <- ggplot() + 
+  geom_point( data = datos, aes(x = hora, y = consumo), alpha = 0.3, color = "gray20") + 
+  geom_quantile(quantiles=c(0.1,0.9),color="firebrick") +
+  geom_line( data = datos, aes(x = hora , y = cuantil_10, color = "q10"), linetype = "solid", size = 1) + 
+  geom_line( data = datos, aes(x = hora , y = cuantil_90, color = "q90"), linetype = "solid", size = 1) + 
+  geom_line( data = datos, aes(x = hora , y = 10.02138, color = "media"), linetype = "solid", size = 1) + 
+  scale_color_manual(name = "", breaks = c("media","q10","q90"), values = c("media" = "#FC4E07","q10"="green","q90"="blue")) + 
+  labs(title = "Evolución del consumo eléctrico a lo largo del día", x = "Hora del día", y = "Consumo eléctrico (MWh)") + 
+  theme_bw() + theme(legend.position = "bottom", plot.title = element_text(face = "bold")) 
+p <- p + scale_x_continuous(breaks = seq(0, 24, 2), labels = seq(0, 24, 2)) 
+p
+```
+
+Observemos que un modelo que predice el promedio no permite responder a la pregunta de si es necesario producir en todas las horas la cantidad de energía consumida en promedio, ya que tanto para las 2 am de la mañana como para las 8 am, el consumo promedio predicho es de 10 MWh aproximadamente, sin embargo, la probabilidad de que se alcancen consumos de 15 MWh a las 2 am es prácticamente nula mientras que esto ocurra a las 8 am sí es factible.
+
+<br>
+
+### Regresión de cuantiles
+
+<br>
+
+Estimación del cuantil 0,9 usando regresión lineal.
+
+```{r, echo=TRUE}
+library(quantreg) 
+ 
+modelo_q09 <- rq(formula = consumo ~ hora, tau = 0.9, data = datos) 
+summary(modelo_q09)
+
+ggplot(data = datos, aes(x = hora, y = consumo)) + 
+  geom_point() + 
+  geom_quantile(quantiles = 0.9) + 
+  theme_bw()
+```
+<br>
+
+Estimación de deciles por regresión lineal.
+
+```{r, echo=TRUE}
+modelo_q <- rq(formula = consumo ~ hora, tau = c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9), data = datos) 
+summary(object = modelo_q, se = "boot")
+
+ggplot(data = datos, aes(x = hora, y = consumo)) + 
+  geom_point() + 
+  geom_quantile(quantiles=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9),color="firebrick") + 
+  theme_bw()
+```
+
+Observamos que una regresión lineal acá no es apropiada para estimar los deciles. Recurrimos a modelos GAMLSS.
+
+<br>
+
+### GAMLSS
+
+<br>
+
+En este caso sabemos cuál es la distribución de la variable respuesta porque fue simulada, pero sino podríamos buscar cuál es la distribución que  mejor ajusta a la variable usando la función "fitDist".
+
+La función fitDist() ajusta toda las distribuciones paramétricas disponibles de una determinada familia, y las compara acorde al GAIC (generalized Akaike information criterion). La familia de distribuciones se especifica con el argumento type y puede ser: "realAll", "realline", "realplus", "real0to1", "counts" y "binom". 
+
+• realAll: distribuciones de la familia realline + realplus. 
+
+• realline: distribuciones continuas en el dominio (−∞,∞): NO, GU, RG ,LO, NET, TF, TF2, PE,PE2, SN1, SN2, exGAUS, SHASH, SHASHo, SHASHo2, EGB2, JSU, JSUo, SEP1, SEP2, SEP3, SEP4, ST1, ST2, ST3, ST4, ST5, SST, GT. 
+
+• realplus: distribuciones continuas en el dominio (0,∞]: EXP, GA,IG,LOGNO, LOGNO2,WEI, WEI2, WEI3, IGAMMA,PARETO2, PARETO2o, GP, BCCG, BCCGo, exGAUS, GG, GIG, LNO,BCTo, BCT, BCPEo, BCPE, GB2. 
+
+• real0to1: distribuciones continuas en el dominio [0,1]: BE, BEo, BEINF0, BEINF1, BEOI, BEZI, BEINF, GB1. 
+
+• counts: distribuciones para cuentas: PO, GEOM, GEOMo,LG, YULE, ZIPF, WARING, GPO, DPO, BNB, NBF,NBI, NBII, PIG, ZIP,ZIP2, ZAP, ZALG, DEL, ZAZIPF, SI, SICHEL,ZANBI, ZAPIG, ZINBI, ZIPIG, ZINBF, ZABNB, ZASICHEL, ZINBF, ZIBNB, ZISICHEL. 
+
+• binom: distribuciones para datos binomiales: BI, BB, DB, ZIBI, ZIBB, ZABI, ZABB.
+
+
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+library(gamlss)
+distribuciones <- fitDist( y = datos$consumo, k = log(length(datos$consumo)), type = "realAll", trace = FALSE, try.gamlss = TRUE, parallel = "multicore", ncpus = 3L ) 
+distribuciones$fits %>% enframe(name = "distribucion", value = "GAIC") %>% arrange(GAIC)
+
+summary(distribuciones)
+
+```
+
+<br>
+
+Usamos GAMLSS basado en la familia Normal que es la distribución que tiene el consumo. 
+
+```{r, echo=TRUE}
+modelo1 <- gamlss( formula = consumo~ pb(hora), sigma.formula = ~ pb(hora), family = NO, data = datos, control = gamlss.control(trace = FALSE) ) 
+summary(modelo1)
+
+```
+
+<br>
+
+Si probamos con la familia de distribuciones sugerida por la función "fitDist" encontramos que hay que tener en cuenta más parámetros además de mu y sigma. Se agregan nu y tau. Como resulta más complejo nos quedaremos con el modelo 1.
+
+```{r, echo=TRUE}
+modelo2 <- gamlss( formula = consumo~ pb(hora), sigma.formula = ~ pb(hora), family = BCPEo, data = datos, control = gamlss.control(trace = FALSE) ) 
+summary(modelo2)
+ 
+```
+
+<br>
+
+Predicción de cuantiles usando el modelo 1 de GAMLSS.
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+# Se predice todo el rango de hora para representar los cuantiles 
+grid_predictor <- seq(0, 24, length.out = 2500) 
+predicciones <- predictAll( modelo1, newdata = data.frame(hora = grid_predictor), type = "response" ) 
+predicciones <- as.data.frame(predicciones) 
+predicciones <- bind_cols(data.frame(hora = grid_predictor), predicciones) 
+predicciones %>% head()
+
+# Se calculan los cuantiles teóricos para establecer el intervalo central que acumula 
+# un 90% de probabilidad empleando los parámetros predichos. 
+predicciones1 <- predicciones %>% mutate( 
+  cuantil_10_pred = purrr::pmap_dbl( 
+  .l = list(mu = mu, sigma = sigma), 
+  .f = function(mu, sigma) {qNO(p = 0.1, mu, sigma)} ), 
+  cuantil_90_pred = purrr::pmap_dbl( 
+    .l = list(mu = mu, sigma = sigma), 
+    .f = function(mu, sigma) {qNO(p = 0.9, mu, sigma)} ) ) 
+
+p <- ggplot() + geom_ribbon( data = datos, aes(x = hora, ymin = cuantil_10, ymax = cuantil_90), fill = "red", alpha = 0.2) + 
+  geom_point( data = datos, aes(x = hora, y = consumo), alpha = 0.3, color = "gray20") + 
+  geom_line( data = predicciones1, aes(x = hora, y = cuantil_10_pred, color = "prediccion_cuantil"), size = 0.7) + 
+  geom_line( data = predicciones1, aes(x = hora, y = cuantil_90_pred, color = "prediccion_cuantil"), size = 0.7) + 
+  geom_line( data = predicciones1, aes(x = hora, y = mu, color = "prediccion_media"), size = 1) +
+  scale_color_manual(name = "", breaks = c("prediccion_cuantil", "prediccion_media"), 
+                   values = c("prediccion_cuantil" = "blue", "prediccion_media" = "firebrick")) + 
+  labs(title = "Evolución del consumo eléctrico a lo largo del día", 
+       subtitle = "Intervalo real entre cuantiles 0.1 y 0.9 sombreado en rojo", 
+       x = "Hora del día", y = "Consumo eléctrico (MWh)") + theme_bw() + 
+  theme(legend.position = "bottom", plot.title = element_text(face = "bold")) 
+p <- p + scale_x_continuous(breaks = seq(0, 24, 2), labels = seq(0, 24, 2)) 
+p
+```
+
+<br>
+
+Si, por ejemplo, se desea conocer la probabilidad de que a las 8 hs el consumo supere los 15 MWh, primero se predicen los parámetros de la distribución para la hora 8 y después se calcula la probabilidad de consumo≥15 con su función de distribución.
+
+```{r, echo=TRUE}
+pred<- predictAll( modelo1, newdata = data.frame(hora = 8), type = "response" ) 
+pred
+
+# Se calcula la probabilidad 
+prob_consumo <- pNO( q = 15, mu = pred$mu, sigma = pred$sigma, lower.tail = FALSE ) 
+prob_consumo
+```
+
+<br>
+
+De acuerdo al modelo, la probabilidad de que a las 8 hs el consumo sea igual o superior a 15 MWh es del 13,6%.
+
+
+<br>
+
+# Regresión logística
+
+<br>
+
+## <span style="color:darkred">Ejemplo</span>
+<br>
+
+Se observaron	 dos grupos de salmones: de Alaska y de Canadá. Se determinó el número de una
+sustancia química producida por su permanencia en agua dulce o en el mar. Se quiere establecer
+un modelo que prediga de qué origen es el salmón conociendo ambas cantidades de sustancias. (Se sabe que los salmones migran de océanos a ríos y al revés).
+
+<br>
+
+### Primer análisis
+
+<br>
+
+```{r, echo=TRUE}
+library(readxl)
+library(ggplot2)
+library(ggpubr)
+
+salmon <- read_excel("salmon.xlsx")
+head(salmon)
+
+dim(salmon)
+
+Origen=factor(salmon$origen)
+p1=ggplot(aes(x=aguadulce,y=mar,fill=Origen,color=Origen),data=salmon)+
+  geom_point(aes(x=aguadulce,y=mar))
+p1
+
+pdul <- ggplot(salmon, aes(aguadulce, colour = Origen)) +
+  geom_freqpoly(binwidth = 10)
+
+pmar <-ggplot(salmon, aes(mar, colour = Origen)) +
+  geom_freqpoly(binwidth = 10)
+ggarrange(pdul, pmar, nrow = 2, common.legend = TRUE, legend = "bottom")
+
+
+Alaska0_Canada1<-ifelse(Origen=="Alaska",0,1)
+table(Alaska0_Canada1)
+
+p2<-ggplot(data=salmon,aes(x = aguadulce, y= origen)) + 
+  geom_boxplot(aes(color = origen)) + geom_point(aes(color = origen)) + 
+  theme_bw() + theme(legend.position = "null")
+p2
+```
+
+<br>
+
+### Modelo logístico
+
+```{r, echo=TRUE}
+modelo_logistico <- glm(Alaska0_Canada1 ~ aguadulce,data=salmon, family = "binomial") 
+
+plot(x = salmon$aguadulce, y = Alaska0_Canada1, col = "darkblue", main = "probabilidad según origen", xlab = "Cantidad en agua dulce", ylab = "Probabilidad según origen") 
+curve(predict(modelo_logistico, data.frame(aguadulce=x), type = "response"), add = TRUE, col = "firebrick", lwd = 2.5)
+
+summary(modelo_logistico)
+
+
+modelo_logistico$coefficients
+
+confint(object = modelo_logistico, level = 0.95)
+
+#modelo_logistico$residuals
+#modelo_logistico$aic
+#modelo_logistico$fitted.values#coincide con lo de abajo
+
+#predict(modelo_logistico, data.frame(aguadulce=salmon$aguadulce), type = "response")
+```
+
+<br>
+
+### Predicciones sobre nuevas observaciones
+
+
+Se crea un vector con nuevos valores en el rango de observaciones.
+
+```{r, echo=TRUE}
+ nuevos_puntos <- seq(from = min(salmon$aguadulce), to = max(salmon$aguadulce), by = 0.5) 
+```
+
+Calculamos los log_odds de los nuevos puntos según el modelo. Si se indica se.fit = TRUE se devuelve el error estándar de cada predicción junto con el valor de la predicción (fit). 
+
+```{r, echo=TRUE}
+predicciones <- predict(modelo_logistico, data.frame(aguadulce = nuevos_puntos), se.fit = TRUE)
+
+head(predicciones$fit)
+head(predicciones$se.fit)
+```
+
+<br>
+
+Mediante la función logit se transforman los log_odds en probabilidades. 
+
+```{r, echo=TRUE}
+predicciones_logit <- exp(predicciones$fit)/(1 + exp(predicciones$fit))
+
+head(predicciones_logit)
+```
+
+<br>
+
+Se calcula el límite inferior y superior del IC del 95%. Una vez calculados los logODDs del intervalo se transforman en probabilidades con la función logit. 
+
+```{r, echo=TRUE}
+limite_inferior <- predicciones$fit - 1.96 * predicciones$se.fit 
+limite_inferior_logit <- exp(limite_inferior)/(1 + exp(limite_inferior)) 
+limite_superior <- predicciones$fit + 1.96 * predicciones$se.fit 
+limite_superior_logit <- exp(limite_superior)/(1 + exp(limite_superior))
+```
+
+```{r, echo=TRUE}
+datos_curva <- data.frame(aguadulce = nuevos_puntos, probabilidad_aguadulce = predicciones_logit, limite_inferior_logit = limite_inferior_logit, limite_superior_logit = limite_superior_logit) 
+ggplot(salmon, aes(x = aguadulce, y = Alaska0_Canada1)) + 
+  geom_point(aes(color = as.factor(Origen)),shape = "I", size = 3) + 
+  geom_line(data = datos_curva, aes(y = probabilidad_aguadulce), color = "firebrick") + 
+  geom_line(data = datos_curva, aes(y = limite_inferior_logit), linetype = "dashed") + 
+  geom_line(data = datos_curva, aes(y = limite_superior_logit), linetype = "dashed") + 
+  theme_bw() + 
+  labs(title = "Modelo regresión logística Origen ~ aguadulce", y = "P(Origen = Canadá | aguadulce)", y = "Origen") + 
+  theme(legend.position = "null") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+<br>
+
+La diferencia de residuos de un objeto glm se almacena en la 'deviance' del modelo, así como la 'deviance' del modelo nulo. 
+
+```{r, echo=TRUE}
+dif_residuos <- modelo_logistico$null.deviance - modelo_logistico$deviance 
+
+# Grados libertad 
+df <- modelo_logistico$df.null - modelo_logistico$df.residual 
+# p-value 
+p_value <- pchisq(q = dif_residuos, df = df, lower.tail = FALSE) 
+
+paste("Diferencia de residuos:", round(dif_residuos, 4))
+paste("Grados de libertad:", df)#"Grados de libertad: 1"
+paste("p-value:", p_value)#"p-value: 2.76249182543243e-19"
+```
+
+<br>
+
+El mismo cálculo anterior se puede obtener directamente con: anova(modelo, test ='Chisq').
+
+```{r, echo=TRUE}
+anova(modelo_logistico, test ='Chisq')
+
+```
+
+<br>
+
+### Nuevo modelo
+
+Incorporamos la segunda covariable.
+
+```{r, echo=TRUE}
+modelo_logistico2 <- glm(Alaska0_Canada1 ~ aguadulce+mar,data=salmon, family = "binomial") 
+summary(modelo_logistico2)
+```
+
+<br>
+
+### Prueba de verosimilitud
+
+```{r, echo=TRUE}
+#install.packages("lmtest", repos = "http://cran.us.r-project.org", dependencies = TRUE)
+library(lmtest)
+
+#Prueba de verosimilitud
+lrtest<-lrtest(modelo_logistico, modelo_logistico2)
+lrtest
+```
+
+<br>
+
+### Test de Hosmer y Lemeshow de bondad de ajuste
+
+En este caso, no queremos rechazar el test porque la hipótesis nula H0 es que el modelo ajusta bien a los datos.
+
+```{r, echo=TRUE}
+#install.packages("ResourceSelection", repos = "http://cran.us.r-project.org", dependencies = TRUE)
+library(ResourceSelection)
+hoslem.test(Alaska0_Canada1, fitted(modelo_logistico2))
+hoslem.test(Alaska0_Canada1, fitted(modelo_logistico))
+```
+
+<br>
+
+### Curva ROC y métricas de interés
+
+<br>
+
+Matriz de confusión
+
+```{r, echo=TRUE}
+#install.packages("vcd", repos = "http://cran.us.r-project.org", dependencies = TRUE)
+library(vcd) 
+predicciones <- ifelse(test = modelo_logistico$fitted.values > 0.5, yes = 1, no = 0) 
+matriz_confusion <- table(Alaska0_Canada1, predicciones, dnn = c("observaciones", "predicciones")) 
+matriz_confusion
+
+mosaic(matriz_confusion, shade = T, colorize = T, gp = gpar(fill = matrix(c("green3", "red2", "red2", "green3"), 2, 2)))
+```
+
+<br>
+
+Separación en muestra de entrenamiento y test para obtener métricas de test.
+
+```{r, echo=TRUE}
+library(pROC)
+
+set.seed(2019)
+entrenamiento<-sample(1:100,70)
+
+validacion<-c(1:100)[-entrenamiento]
+
+salmon_train<-salmon[entrenamiento,]
+salmon_test<-salmon[validacion,]
+Alaska0_Canada1_train<-Alaska0_Canada1[entrenamiento]
+table(Alaska0_Canada1_train)
+
+Alaska0_Canada1_test<-Alaska0_Canada1[validacion]
+table(Alaska0_Canada1_test)
+ 
+salmon_new<-data.frame(salmon_test)
+salmon_new$origen<-Alaska0_Canada1_test
+
+#Modelo generado con datos de entrenamiento
+modelo_logisticoNew <- glm(Alaska0_Canada1_train ~ aguadulce+mar,data=salmon_train, family = "binomial") 
+summary(modelo_logisticoNew)
+
+# Se obtienen las probabilidades predichas para cada clase 
+predicciones <- predict(object = modelo_logisticoNew, newdata = salmon_new, type = "response") 
+head(predicciones)
+
+
+# Si no se especifica type = "response" el predict devuelve los log_odds
+pred<-predict(object = modelo_logisticoNew, newdata = salmon_new)
+
+head(pred)
+```
+
+<br>
+
+Curva ROC sobre datos de test.
+
+```{r, echo=TRUE}
+curva_roc <- roc(response = salmon_new$origen, predictor = predicciones) 
+curva_roc
+
+# Gráfico de la curva 
+#plot(curva_roc)
+plot(curva_roc,col="red",lwd=2,main="ROC test")
+legend("bottomright",legend=paste("AUC=",round(auc(curva_roc),4)))
+
+# otra forma
+#install.packages("ROCR", repos = "http://cran.us.r-project.org", dependencies = TRUE)
+library(ROCR)
+
+real <- salmon_new$origen
+
+predic <-prediction(predicciones,real)
+perf <-  performance(predic, "tpr","fpr")
+
+plot(perf,
+     main = "Curva ROC",
+     xlab="Tasa de falsos positivos", 
+     ylab="Tasa de verdaderos positivos")
+abline(a=0,b=1,col="blue",lty=2)
+grid()
+auc <- as.numeric(performance(predic,"auc")@y.values)
+legend("bottomright",legend=paste(" AUC =",round(auc,4)))
+```
+
+<br>
+
+Curva Recall vs Precision.
+
+```{r, echo=TRUE}             
+RP.perf <- performance(predic, "prec", "rec");
+
+plot (RP.perf);
+
+# curva ROC
+ROC.perf <- performance(predic, "tpr", "fpr");
+plot (ROC.perf);
+
+# Área bajo la curva ROC
+auc.tmp <- performance(predic,"auc");
+auc <- as.numeric(auc.tmp@y.values)
+auc
+```
+
+<br>
+
+Métricas de interés.
+
+```{r, echo=TRUE}
+actual_values<-Alaska0_Canada1_test
+predict_value<-predicciones
+table(ACTUAL=actual_values,PREDICTED=predict_value>0.5) # asumimos umbral de 0.5
+```
+
+<br>
+
+Recordemos que:
+
+Precision : TP / (TP+FP) 
+
+Recall : TP / (TP+FN) 
+
+F1 Score : (2 * Precision * Recall) / (Precision+Recall)
+
+```{r, echo=TRUE}
+pred<-predict_value>0.5
+TP<-length(actual_values[(actual_values==1)&(pred==1)])#15
+TN<-length(actual_values[(actual_values==0)&(pred==0)])#12
+FP<-length(actual_values[(actual_values==0)&(pred==1)])#1
+FN<-length(actual_values[(actual_values==1)&(pred==0)])#2
+
+precision<-TP/(TP+FP)
+precision
+recall<-TP/(TP+FN)
+recall
+f1_score<-(2*precision*recall)/(precision+recall) 
+f1_score
+```
+
+<br>
+
+Estimación del error.
+
+```{r, echo=TRUE}
+pred_test_RegLog_0_1<-ifelse(predict_value>0.5,1,0)#idem pred
+
+#Porcentaje de error
+error_RegLog<- mean(Alaska0_Canada1_test!= pred_test_RegLog_0_1) * 100
+error_RegLog
+
+```
+
+<br>
+

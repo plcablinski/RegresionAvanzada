@@ -10,7 +10,9 @@ colesterol <- c(13.4, 11, 15.3, 16.7, 13.4, 20.1, 13.6,18.3, 10.4, 14.2, 20.5, 1
 datos <- data.frame(dieta, colesterol)
 modelo <- lm(colesterol ~ dieta, data=datos)
 summary(modelo)
-anova(modelo)
+anova.modelo <- anova(modelo)
+anova.modelo
+
 # Por cada dieta, calcular el promedio y la desviación estándar
 aggregate(colesterol ~ dieta, data=datos, mean)
 aggregate(colesterol ~ dieta, data=datos, sd)
@@ -23,6 +25,7 @@ ggplot(datos, aes(x=dieta, y=colesterol, fill=dieta)) + geom_boxplot()
 # Verificar los supuestos del ANOVA
 # 1. Normalidad
 shapiro.test(residuals(modelo))
+
 library(nortest)
 ad.test(residuals(modelo))
 qqPlot(modelo)

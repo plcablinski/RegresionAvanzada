@@ -1,0 +1,415 @@
+---
+title: "Modelo Lineal Multivariado - Clase 4"
+author: "Cecilia Oliva"
+date: "28/05/2024"
+output:
+   html_document:
+     toc: yes
+     code_folding: show
+     toc_float: yes
+     df_print: paged
+     theme: united
+     code_download: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<br>
+<br>
+
+# Modelo lineal mulivariado
+
+<br>
+
+## <span style="color:darkred">Métodos de regularización</span>
+
+<br>
+
+### Ejemplo de pesos de recién nacidos
+
+<br>
+Analizamos los siguientes datos que corresponden a mediciones de 100 niños nacidos con bajo peso (es decir, con menos de 1500 g.) en Boston, Massachusetts.
+
+Las variables que usaremos son:
+
+headcirc: es el perímetro cefálico (medido en cm.) de un bebé recién nacido con bajo peso,
+
+gestage: es la edad gestacional o duración de la gestación del i-ésimo bebé de bajo peso,
+
+birthwt: es el peso al nacer del i-ésimo niño, en gramos.
+
+```{r, echo=TRUE}
+file<-"low birth weight infants.txt"
+
+data <- read.table(file = file, header = TRUE)
+head(data)
+
+```
+
+
+## Ridge
+
+La función glmnet() estandariza por defecto las variables antes de realizar el ajuste del modelo.
+
+```{r, echo=TRUE}
+x <- model.matrix(headcirc ~ ., data = data)[, -1] 
+head(x)
+
+y <- data$headcirc
+```
+
+Para obtener un ajuste mediante regresión Ridge se indica argumento alpha=0.
+
+```{r, echo=TRUE}
+#install.packages("glmnet")
+library(glmnet) 
+ 
+modelos_ridge <- glmnet(x = x, y = y, alpha = 0)
+
+plot(modelos_ridge, xvar = "lambda", label = TRUE)
+
+set.seed(1) 
+# x e y son la matriz modelo y el vector respuesta creados anteriormente con 
+# los datos  
+cv_error_ridge <- cv.glmnet(x = x, y = y, alpha = 0, nfolds = 10, type.measure = "mse") 
+plot(cv_error_ridge)
+```
+
+Valor lambda con el que se consigue el mínimo test-error: 
+
+```{r, echo=TRUE}
+cv_error_ridge$lambda.min
+```
+
+
+Valor lambda óptimo: mayor valor de lambda con el que el test-error no se aleja más de 1 sd del mínimo test-error posible. 
+
+```{r, echo=TRUE}
+cv_error_ridge$lambda.1se
+```
+
+Se muestra el valor de los coeficientes para el valor de lambda óptimo.
+
+```{r, echo=TRUE}
+modelo_final_ridge <- glmnet(x = x, y = y, alpha = 0, lambda = 3.280053) 
+coef(modelo_final_ridge)
+
+```
+
+<br>
+
+## Lasso
+
+Para obtener un ajuste mediante regresión Lasso se indica argumento alpha=1.
+
+```{r, echo=TRUE}
+modelos_lasso <- glmnet(x = x, y = y, alpha = 1) 
+plot(modelos_lasso, xvar = "lambda", label = TRUE)
+
+set.seed(1) 
+cv_error_lasso <- cv.glmnet(x = x, y = y, alpha = 1, nfolds = 10) 
+plot(cv_error_lasso)
+
+cv_error_lasso$lambda.min
+cv_error_lasso$lambda.1se
+```
+
+
+Se reajusta el modelo con todas las observaciones empleando el valor de lambda óptimo. 
+
+```{r, echo=TRUE}
+modelo_final_lasso <- glmnet(x=x, y=y, alpha=1,lambda=cv_error_lasso$lambda.1se) 
+coef(modelo_final_lasso)
+
+par(mfrow = c(1, 2)) 
+plot(cv_error_ridge, ylab = "Mean Square Error Ridge") 
+abline(h = 7) 
+plot(cv_error_lasso, ylab = "Mean Square Error Lasso") 
+abline(h = 7)
+par(mfrow = c(1, 1))
+```
+
+<br>
+
+# Modelos basados en PCA
+
+<br>
+
+## <span style="color:darkred">Regresión basada en componentes principales</span>
+
+<br>
+
+### Ejemplo de datos de niños de bajo peso al nacer
+
+<br>
+
+Analizamos los siguientes datos que corresponden a mediciones de 100 niños nacidos con bajo peso (es decir, con menos de 1500g.) en Boston, Massachusetts.
+
+Las variables que usaremos son:
+
+headcirc: es el perímetro cefálico (medido en cm.) de un bebé recién nacido con bajo peso,
+
+gestage: es la edad gestacional o duración de la gestación del bebé de bajo peso,
+
+birthwt: es el peso al nacer del niño, en gramos,
+
+length: es la altura aproximada del bebé,
+
+momage: es la edad de la mamá del bebé,
+
+toxemia: es 1 si el bebé tiene presencia de sustancias tóxicas en la sangre y 0 sino.
+
+```{r, echo=TRUE}
+file<-"low birth weight infants.txt"
+
+data <- read.table(file = file, header = TRUE)
+head(data)
+dim(data)
+
+```
+
+<br>
+
+```{r, echo=TRUE}
+data <- na.omit(data)
+data<- data[,-6]#quitamos la variable categórica
+```
+
+<br>
+
+### PCR
+
+<br>
+
+Es importante estandarizar las variables indicándolo con el argumento scale=TRUE. Indicando validation = CV, se emplea 10-fold-cross-validation para identificar el número óptimo de componentes.
+```{r, echo=TRUE}
+library(pls) 
+set.seed(2)
+modelo_pcr <- pcr(headcirc ~ ., data = data, scale = TRUE, validation = "CV") 
+summary(modelo_pcr)
+```
+
+El summary devuelve la estimación del RMSEP (raíz cuadrada del MSE) para cada posible número de componentes introducidas en el modelo. También se muestra el % de varianza explicada acumulada por cada número de componentes.
+
+```{r, echo=TRUE}
+validationplot(modelo_pcr, val.type = "RMSEP")
+```
+
+Para conocer el número de componentes con el que se minimiza el error:
+
+```{r, echo=TRUE}
+which.min(x = modelo_pcr$validation$PRESS)
+```
+
+Si bien el menor error se alcanza con 4 componentes, se observa que a partir de la primera componente la mejora es mínima. El modelo que incluye únicamente la primera componente cumple el principio de parsimonia.
+
+<br>
+
+### PLS
+
+```{r, echo=TRUE}
+set.seed(123) 
+modelo_pls <- plsr(formula = headcirc ~ ., data = data, scale. = TRUE, validation = "CV") 
+summary(modelo_pls)
+
+validationplot(modelo_pls, val.type = "RMSEP")
+which.min(x = modelo_pls$validation$PRESS)
+```
+
+Nuevamente, aunque el menor error se alcanza con 4 componentes, se observa que a partir de la primera componente la mejora es mínima. El modelo que incluye únicamente la primera componente cumple el principio de parsimonia.
+
+<br>
+
+## <span style="color:darkred">Comparación de modelos</span>
+
+
+### Regresión por mínimos cuadrados
+
+```{r, echo=TRUE}
+set.seed(1) 
+indices_entrenamiento <- sample(x = 1:nrow(data), size = round(nrow(data) * (2/3))) 
+# 2/3 de las observaciones 
+indices_test <- (1:nrow(data))[-indices_entrenamiento] 
+data_1 <- data[indices_entrenamiento, ] 
+data_2 <- data[indices_test, ]
+
+#Ordinary least square (regresión por mínimos cuadrados)
+modelo_OLS <- lm(formula = headcirc ~ ., data = data_1) 
+test_MSE_OLS <- mean((predict(modelo_OLS, data_2) - data_2$headcirc)^2) 
+test_MSE_OLS
+```
+
+### Modelo con selección de variables Backward con 10-cross validation
+
+```{r, echo=TRUE}
+require(leaps) 
+require(ggplot2) 
+set.seed(2)
+grupo <- sample(rep(x = 1:10, length = nrow(data_1)))
+
+predict.regsubsets <- function(object, newdata, id, ...) { 
+  # Extraer la fórmula del modelo (variable dependiente ~ predictores) 
+  form <- as.formula(object$call[[2]]) 
+  # Generar una matriz modelo con los nuevos datos y la fórmula 
+  mat <- model.matrix(form, newdata) 
+  # Extraer los coeficientes del modelo 
+  coefi <- coef(object, id = id)
+  # Almacenar el nombre de las variables predictoras del modelo 
+  xvars <- names(coefi) 
+  # Producto matricial entre los coeficientes del modelo y los valores de los 
+  # predictores de las nuevas observaciones para obtener las predicciones 
+  mat[, xvars] %*% coefi } 
+# Matriz que almacena los test-error estimados. Cada columna representa un 
+# modelo Cada fila es uno de los 10 grupos en los que se han dividido las 
+# observaciones 
+error_matrix <- matrix(data = NA, nrow = 10, ncol = 4, dimnames = list(NULL, c(1:4))) 
+# Loop en el que se excluye en cada iteración un grupo distinto 
+for (k in 1:10) { 
+  # Identificación de data empleados como training 
+  train <- data_1[grupo != k, ] 
+  # Selección de los mejores modelos para cada tamaño basándose en RSS 
+  mejores_modelos <- regsubsets(headcirc ~ ., data = train, nvmax = 4, method = "backward") 
+  # Para cada uno de los modelos 'finalistas' se calcula el test-error con el 
+  # grupo excluido 
+  for (i in 1:4) { 
+    test <- data_1[grupo == k, ] 
+    # Las predicciones del modelo i almacenado en el objeto regsubsets se 
+    # extraen mediante la función predict.regsubsets() definida arriba 
+    predicciones <- predict.regsubsets(object = mejores_modelos, newdata = test, id = i) 
+    # Cálculo y almacenamiento del MSE para el modelo i 
+    error_matrix[k, i] <- mean((test$headcirc - predicciones)^2) } 
+  } 
+mean_cv_error <- apply(X = error_matrix, MARGIN = 2, FUN = mean) 
+which.min(x = mean_cv_error)
+```
+
+
+```{r, echo=TRUE}
+ggplot(data = data.frame(n_predictores = 1:4, mean_cv_error = mean_cv_error), aes(x = n_predictores, y = mean_cv_error)) + 
+  geom_line() + geom_point() + 
+  geom_point(aes(x = n_predictores[which.min(mean_cv_error)], y = mean_cv_error[which.min(mean_cv_error)]), colour = "red", size = 3) + 
+  scale_x_continuous(breaks = c(0:4)) + theme_bw() + 
+  labs(title = "Error medio con cross-validation vs número de predictores", x = "número predictores")
+```
+
+Generamos el modelo final sabiendo la cantidad de predictores óptima usando Backward.
+
+```{r, echo=TRUE}
+modelo_final <- regsubsets(headcirc ~ ., data = data_1, nvmax = 4, method = "backward") 
+coef(object = modelo_final, 2)
+```
+
+Como el modelo está dentro de un objeto regsubsets, en predict() se tiene que identificar el id. 
+
+<br>
+
+```{r, echo=TRUE}
+test_MSE_Back <- mean((predict(modelo_final, data_2, id = 2)-data_2$headcirc)^2) 
+test_MSE_Back
+```
+
+<br>
+
+### Regresión Ridge
+
+La función glmnet() requiere pasar los predictores como matriz y la variable dependiente como vector. 
+
+```{r, echo=TRUE}
+x_data_1 <- model.matrix(headcirc ~ ., data = data_1)[, -1] 
+y_data_1 <- data_1$headcirc 
+x_data_2 <- model.matrix(headcirc ~ ., data = data_2)[, -1] 
+y_data_2 <- data_2$headcirc 
+```
+
+Se identifica mediante k-cross-validation el mejor valor de lambda para la regresión de Ridge.
+
+```{r, echo=TRUE}
+library(glmnet) 
+set.seed(1) 
+cv_error_ridge <- cv.glmnet(x=x_data_1, y = y_data_1, alpha = 0, nfolds = 10, type.measure = "mse") 
+# Para obtener un ajuste mediante *ridge regression* se indica argumento alpha=0 
+modelo_ridge <- glmnet(x = x_data_1, y = y_data_1, alpha = 0, lambda = cv_error_ridge$lambda.1se) 
+# Se almacenan las predicciones en una variable separada para no concatenar 
+# tanto código 
+predicciones <- predict(object = modelo_ridge, newx = x_data_2, s = cv_error_ridge$lambda.1se, exact = TRUE) 
+test_MSE_ridge <- mean((predicciones - data_2$headcirc)^2) 
+test_MSE_ridge
+```
+
+<br>
+
+### LASSO
+
+```{r, echo=TRUE}
+library(glmnet) 
+set.seed(1) 
+# Se identifica mediante k-cross-validation el mejor valor de lambda para lasso 
+cv_error_lasso <- cv.glmnet(x = x_data_1, y = y_data_1, alpha = 1, nfolds = 10, type.measure = "mse") 
+# Para obtener un ajuste mediante lasso se indica argumento alpha=1 
+modelo_lasso <- glmnet(x = x_data_1, y = y_data_1, alpha = 1, lambda = cv_error_lasso$lambda.1se) 
+# Se almacenan las predicciones en una variable separada 
+predicciones <- predict(object = modelo_lasso, newx = x_data_2, s = cv_error_lasso$lambda.1se, exact = TRUE) 
+test_MSE_lasso <- mean((predicciones - data_2$headcirc)^2) 
+test_MSE_lasso
+```
+
+<br>
+
+### PCR
+
+```{r, echo=TRUE}
+library(pls) 
+set.seed(123)
+modelo_pcr <- pcr(headcirc ~ ., data = data_1, scale = TRUE, validation = "CV") 
+validationplot(modelo_pcr, val.type = "RMSEP")
+```
+
+Para evaluar el modelo consideramos la primera componente, dado que agregar más no mejora significativamente.
+
+```{r, echo=TRUE}
+set.seed(123)
+which.min(x = modelo_pcr$validation$PRESS)#Para conocer el número de componentes con el que se minimiza el error
+
+predicciones <- predict(object = modelo_pcr, newdata = data_2, ncomp = 1) 
+test_MSE_PCR <- mean((predicciones - data_2$headcirc)^2) 
+test_MSE_PCR
+```
+
+<br>
+
+### PLS
+
+```{r, echo=TRUE}
+set.seed(123)
+modelo_pls <- plsr(headcirc ~ ., data = data_1, scale = TRUE, validation = "CV") 
+validationplot(modelo_pls, val.type = "RMSEP")
+```
+
+Nuevamente, para evaluar el modelo consideramos la primera componente, dado que agregar más no mejora significativamente.
+
+```{r, echo=TRUE}
+which.min(x = modelo_pls$validation$PRESS)#Para conocer el número de componentes con el que se minimiza el error
+
+predicciones <- predict(object = modelo_pls, newdata = data_2, ncomp = 1) 
+test_MSE_PLS <- mean((predicciones - data_2$headcirc)^2) 
+test_MSE_PLS
+```
+
+### Comparación de modelos
+
+```{r, echo=TRUE}
+
+metodo <- c("OLS", "Backward", "Regresión Ridge", "LASSO", "PCR", "PLS") 
+test_MSE <- c(test_MSE_OLS, test_MSE_Back, test_MSE_ridge, test_MSE_lasso, test_MSE_PCR,test_MSE_PLS) 
+resultados <- data.frame(metodo, test_MSE) 
+resultados
+```
+
+```{r, echo=TRUE}
+ggplot(data = resultados, aes(x = reorder(metodo, test_MSE), y = sqrt(test_MSE))) + 
+  geom_bar(stat = "identity") + 
+  labs(x = "Método de regresión", y = expression(sqrt("test MSE"))) + theme_bw()
+```
+

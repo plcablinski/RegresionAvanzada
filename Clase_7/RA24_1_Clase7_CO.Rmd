@@ -1,0 +1,457 @@
+---
+title: "Modelos de clasificación - Clase 7"
+author: "Cecilia Oliva"
+date: "18/06/2024"
+output:
+   html_document:
+     toc: yes
+     code_folding: show
+     toc_float: yes
+     df_print: paged
+     theme: united
+     code_download: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<br>
+<br>
+
+# Test de Hotelling
+
+<br>
+
+## <span style="color:darkred">Ejemplo</span>
+
+<br>
+
+Retomamos el ejemplo de la clase pasada para el cual ya aplicamos regresión logística.
+
+Se observaron	 dos grupos de salmones: de Alaska y de Canadá. Se determinó el número de una
+sustancia química producida por su permanencia en agua dulce o en el mar. Se quiere establecer
+un modelo que prediga de qué origen es el salmón conociendo ambas cantidades de sustancias. (Se sabe que los salmones migran de océanos a ríos y al revés).
+
+<br>
+
+```{r, echo=TRUE}
+library(ggplot2)
+library(ggpubr)
+library(readxl)
+salmon <- read_excel("salmon.xlsx")
+```
+
+
+<br>
+
+Analizamos los supuestos de normalidad multivariada y homocedasticidad. Luego aplicamos el test de Hotelling para saber si hay diferencia de vectores medios.
+
+
+```{r, echo=TRUE}
+library(mvnormtest)
+mshapiro.test(t(salmon[salmon$origen=="Alaska",-1]))
+
+mshapiro.test(t(salmon[salmon$origen=="Canada",-1]))
+```
+
+No se rechaza la normalidad multivariada en ninguno de los dos grupos.
+
+<br>
+
+Analizamos homocedasticidad.
+
+```{r, echo=TRUE}
+library(biotools) 
+boxM(data =salmon[,-1], grouping = salmon$origen)
+```
+
+Según el test M de Box no se satisfce el supuesto de homocedasticidad a nivel 5%, pero si tomamos como nivel de significancia 1% no rechazaríamos el test.
+
+Apliquemos el test de Hotelling.
+
+```{r, echo=TRUE}
+library(corpcor)
+library(Hotelling)
+T2test = hotelling.test(.~ origen, data =salmon) 
+T2test
+```
+
+El test rechaza igualdad de vectores medios, es decir que tiene sentido armar un modelo supervisado que trate de predecir las distintas clases. 
+
+<br>
+
+# Análisis discriminante lineal (LDA)
+
+<br>
+
+```{r, echo=TRUE}
+
+library(MASS)
+
+# LDA
+
+salmon_lda0 <- lda(origen ~ aguadulce+mar, data = salmon)
+salmon_lda0
+```
+
+<br>
+
+### clasificación cv-loo
+
+```{r, echo=TRUE}
+salmon_lda <- lda(origen ~ aguadulce+mar, data = salmon,CV=TRUE)
+salmon_lda
+
+table(salmon_lda$class,salmon$origen)
+
+TasaBuenaclasif_lda<-mean(salmon_lda$class==salmon$origen)# tasa de buena clasificación del discr. lineal
+TasaBuenaclasif_lda
+error_cvloo_lda<-mean(salmon_lda$class!=salmon$origen)# tasa de error
+error_cvloo_lda
+```
+
+<br>
+
+### Clasificación con entrenamiento y validación
+
+```{r, echo=TRUE}
+set.seed(2019)
+entrenamiento<-sample(1:100,70)
+validación<-c(1:100)[-entrenamiento]
+salmon_lda1 <- lda(origen ~ aguadulce+mar, data = salmon[entrenamiento,])
+salmon_lda1
+
+prediccionesLda_2 <- predict(object = salmon_lda1, newdata = salmon[validación,-1]) 
+table(salmon$origen[validación], prediccionesLda_2$class, dnn = c("Origen real", "Origen predicho"))
+
+error_test_lda<- mean(salmon$origen[validación] != prediccionesLda_2$class) * 100
+error_test_lda
+```
+
+<br>
+
+# Análisis discriminante cuadrático (QDA)
+
+Recordar que el análisis discriminante cuadrático no requiere validar el supuesto de homocedasticidad (sí el de normalidad multivariada).
+
+```{r, echo=TRUE}
+salmon_qda0 <- qda(origen ~ aguadulce+mar, data = salmon)
+salmon_qda0
+```
+
+<br>
+
+### clasificación cv-loo
+
+```{r, echo=TRUE}
+salmon_qda <- qda(origen ~ aguadulce+mar, data = salmon,CV=TRUE)
+salmon_qda
+
+table(salmon_qda$class,salmon$origen)
+
+TasaBuenaclasif_qda<-mean(salmon_qda$class==salmon$origen)# tasa de buena clasificación del discr cuadrático
+TasaBuenaclasif_qda
+error_cvloo_qda<-mean(salmon_qda$class!=salmon$origen)# tasa de error
+error_cvloo_qda
+```
+
+<br>
+
+### Clasificación con entrenamiento y validación
+
+```{r, echo=TRUE}
+salmon_qda1 <- qda(origen ~ aguadulce+mar, data = salmon[entrenamiento,])
+salmon_qda1
+
+prediccionesQda_2<- predict(object = salmon_qda1, newdata = salmon[validación,-1]) 
+table(salmon$origen[validación], prediccionesQda_2$class, dnn = c("Origen real", "Origen predicho"))
+
+error_test_qda<- mean(salmon$origen[validación] != prediccionesQda_2$class) * 100
+error_test_qda
+```
+
+
+```{r, echo=TRUE}
+library(klaR) # Classification and visualization package
+Origen=factor(salmon$origen)
+partimat(Origen ~ mar+aguadulce, data = salmon, method = "qda", 
+         imageplot = TRUE,col.mean=1,image.colors = c("lightgrey","red"))
+partimat(Origen ~ mar+aguadulce, data = salmon, method = "lda", col.mean=1,
+         imageplot = TRUE,image.colors = c("lightgrey","red"))
+```
+
+<br>
+
+# Support vector machine
+
+```{r, echo=TRUE}
+library(ggplot2)
+library(e1071)
+
+Alaska0_Canada1<-ifelse(Origen[entrenamiento]=="Alaska",0,1)
+Alaska0_Canada1_test<-ifelse(Origen[validación]=="Alaska",0,1)
+```
+
+<br>
+
+Recordemos algunos parámetros importantes de la función svm.
+
+
+**type:**
+
+C-classification (default para clasificación)
+
+nu-classification
+
+one-classification (for novelty detection)
+
+eps-regression (default para regresión)
+
+nu-regression
+
+<br>
+
+**kernel:**
+
+radial (default)
+
+linear
+
+polynomial
+
+radial basis
+
+sigmoid
+
+<br>
+
+**gamma:**	
+
+parámetro necesario para todos los kernels excepto el lineal (default: 1/(cantidad de variables)).
+
+<br>
+
+**cost:**	
+
+costo de violación de restricciones (default: 1). Es el valor ‘C’ (constante del término de regularización en la fórmula de optimización de Lagrange).
+
+
+```{r, echo=TRUE}
+modelo_svm=svm(as.factor(Alaska0_Canada1)~mar+aguadulce,data=salmon[entrenamiento,],method="C-classification",kernel="radial",cost=10,gamma=.1)
+pred_svm=predict(modelo_svm, salmon[validación,-1])
+table(salmon$origen[validación], pred_svm, dnn = c("Origen real", "Origen predicho"))
+
+error_svm<- mean(Alaska0_Canada1_test!= pred_svm) * 100
+error_svm
+
+#plot(modelo_svm,salmon[entrenamiento,],symbolPalette=topo.colors(3),dataSymbol="o",color.palette=cm.colors)
+plot(modelo_svm,salmon[entrenamiento,])
+
+```
+
+<br>
+
+
+# GAMLSS: ejemplo adicional 
+
+## <span style="color:darkred">Malnutrición de niños en india (DHS, 1998-99)</span> 
+
+Se emplea un conjunto de datos "india" (de Demographic and Health Survey, 1998-99) con el que se crea un modelo predictivo del índice de malnutrición infantil. El índice stunted growth se define como la diferencia estandarizada entre el crecimiento de un niño y el crecimiento medio (mediana) de todos los niños de la población a la que pertenece. Está considerado como una de las principales consecuencias de la malnutrición de las madres durante el embarazo o de los niños durante los primeros meses de vida. Valores negativos indican un retraso en el crecimiento del niño. Se crea un modelo para predecir el stunted growth en función de la edad e índice de masa corporal de la madre y de los niños durante los primeros meses de vida.
+
+```{r, echo=TRUE}
+library(gamboostLSS) 
+data(india) 
+datos <- india 
+head(datos)
+dim(india)
+```
+
+**stunting**
+
+A numeric z-score for malnutrition, stunted growth to be more precise, which ranges from 
+-6 to 6, where negative values represent malnourished children. Children with values 
+below -2 are considered stunted (height-for-age).
+
+**cbmi**
+
+BMI of the child.(bmi= body mass index)
+
+**cage**
+
+Age of the child in months.
+
+**mbmi**
+
+BMI of the mother.
+
+**mage**
+
+Age of the mother in years.
+
+
+```{r, echo=TRUE}
+#install.packages("gamlss")
+#install.packages("skimr")
+
+library(gamlss) 
+library(tidyverse) 
+library(ggpubr) 
+library(skimr) 
+skim(datos)
+
+p1 <- ggplot(data = datos, aes(x = cbmi, y = stunting)) + 
+  geom_point(alpha = 0.4) + labs(ttile = "Malnutrición vs IMC infantil") + 
+  theme_bw() 
+p2 <- ggplot(data = datos, aes(x = cage, y = stunting)) + geom_point(alpha = 0.4) + 
+  labs(ttile = "Malnutrición vs edad de los niños") + theme_bw() 
+p3 <- ggplot(data = datos, aes(x = mbmi, y = stunting)) + geom_point(alpha = 0.4) + 
+  labs(ttile = "Malnutrición vs IMC de las madres") + theme_bw() 
+p4 <- ggplot(data = datos, aes(x = mage, y = stunting)) + geom_point(alpha = 0.4) + 
+  labs(ttile = "Malnutrición vs edad de las madres") + theme_bw() 
+
+ggpubr::ggarrange( plotlist = list(p1, p2, p3, p4) ) %>% 
+  ggpubr::annotate_figure( 
+    top = text_grob("Relación entre la malnutrición y el resto de variables", 
+                    color = "Black", face = "bold", size = 14, x = 0.3) )
+
+ggplot(data = datos, aes(x = stunting)) + geom_density(alpha = 0.5, fill = "gray50") + 
+  geom_rug(alpha = 0.2) + labs(title = "Distribución de la malnutrición infantil") + theme_bw()
+```
+
+<br>
+
+### Modelo lineal
+```{r, echo=TRUE}
+# El resultado es igual al obtenido con lm()
+modelo_lm <- gamlss( formula = stunting ~ cbmi + cage + mbmi + mage, 
+                     family = NO, data = datos, trace = FALSE ) 
+summary(modelo_lm)
+
+paste("El valor estimado de la varianza es:", exp(0.42291))#1.5263969140621
+
+plot(modelo_lm)
+
+# Worm plot de los residuos 
+wp(modelo_lm, ylim.all = 1)
+```
+
+<br>
+
+### Modelo basado en la familia Normal
+
+Usamos la distribución normal para la variable respuesta ya que es simétrica y toma valores positivos y negativos. Se emplea P-splines para los predictores continuos.
+
+```{r, echo=TRUE}
+
+modelo_gam <- gamlss( formula = stunting ~ pb(cbmi) + pb(cage) + pb(mbmi) + pb(mage),
+                      family = NO, data = datos) 
+summary(modelo_gam)
+
+# Esta función puede tardar si hay muchos predictores no lineales o muchos datos. 
+drop1(modelo_gam, parallel = "multicore", ncpus = 4)
+
+term.plot(modelo_gam, pages = 1, ask = FALSE, rug = TRUE)
+
+plot(modelo_gam)
+
+# Worm plot de los residuos 
+wp(modelo_gam, ylim.all = 0.5)
+```
+
+<br>
+
+Comparamos los modelos modelo_lm y modelo_gam.
+
+```{r, echo=TRUE}
+
+GAIC(modelo_lm, modelo_gam)
+
+```
+
+<br>
+
+### Modelos GAMLSS para distribución Normal ajustando parámetros de media mu y escala sigma
+
+```{r, echo=TRUE}
+modelo_gamlss <- gamlss( formula = stunting ~ pb(cbmi) + pb(cage) + pb(mbmi) + pb(mage), 
+                         sigma.formula = ~ pb(cbmi) + pb(cage) + pb(mbmi) + pb(mage), 
+                         family = NO, data = datos, trace = FALSE ) 
+summary(modelo_gamlss)
+
+drop1(modelo_gamlss, parameter = "sigma", parallel = "multicore", ncpus = 4)
+
+modelo_gamlss2 <- gamlss( formula = stunting ~ pb(cbmi) + pb(cage) + pb(mbmi) + pb(mage), 
+                          mu.formula = ~ pb(cbmi) + pb(cage) + pb(mbmi),
+                         sigma.formula = ~ pb(cbmi) + pb(cage) + pb(mbmi), 
+                         family = NO, data = datos, trace = FALSE )
+
+# Worm plot de los residuos 
+wp(modelo_gamlss2, ylim.all = 2)
+```
+
+<br>
+
+Comparamos los modelos modelo_lm, modelo_gam, modelo_gamlss y modelo_gamlss2.
+
+```{r, echo=TRUE}
+GAIC( modelo_lm, modelo_gam, modelo_gamlss,modelo_gamlss2 )
+```
+
+<br>
+
+### Nuevo modelo GAMLSS para distribución Normal ajustando parámetros de media y escala
+
+```{r, echo=TRUE}
+modelo_gamlss3 <- gamlss( formula = stunting ~ pb(cbmi) + pb(cage) + pb(mbmi), 
+                          mu.formula = ~ pb(cbmi) + pb(cage) + pb(mbmi),
+                          sigma.formula = ~ pb(cbmi) + pb(cage) + pb(mbmi), 
+                          family = NO, data = datos, trace = FALSE )
+
+wp(modelo_gamlss3, ylim.all = 2)
+```
+
+<br>
+
+Comparamos los modelos modelo_lm, modelo_gam, modelo_gamlss y modelo_gamlss3.
+
+```{r, echo=TRUE}
+GAIC( modelo_lm, modelo_gam, modelo_gamlss,modelo_gamlss3 )
+```
+
+<br>
+
+### Modelo GAMLSS para distribución T de student ajustando parámetros de media y escala
+
+La distribución T de student para la variable respuesta también sirve porque es simétrica y toma valores positivos y negativos. Nuevamente se utilizan P-splines para los predictores continuos.
+
+```{r, echo=TRUE}
+modelo_gamlss4 <- gamlss( formula = stunting ~ pb(cbmi) + pb(cage) + pb(mbmi) + pb(mage), 
+                          mu.formula = ~ pb(cbmi) + pb(cage) + pb(mbmi)+ pb(mage),
+                          sigma.formula = ~ pb(cbmi) + pb(cage) + pb(mbmi)+ pb(mage), 
+                          family = TF, data = datos, trace = FALSE )
+
+drop1(modelo_gamlss4, parameter = "sigma", parallel = "multicore", ncpus = 4)
+
+drop1(modelo_gamlss4, parameter = "mu", parallel = "multicore", ncpus = 4)
+
+
+# Worm plot de los residuos 
+wp(modelo_gamlss4, ylim.all = 2)
+```
+
+<br>
+
+Comparamos los modelos modelo_lm, modelo_gam, modelo_gamlss y modelo_gamlss4.
+
+```{r, echo=TRUE}
+
+GAIC( modelo_lm, modelo_gam, modelo_gamlss,modelo_gamlss4 )
+
+
+```
+
+El modelo modelo_gamlss4 es el de menor GAIC entre todos los evaluados.
+
+<br>
+
