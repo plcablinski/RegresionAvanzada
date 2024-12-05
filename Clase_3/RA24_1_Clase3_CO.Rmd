@@ -606,7 +606,7 @@ set.seed(12345)
 train_control5 <- trainControl(method = "repeatedcv", number = 10, repeats = 10)
 model5 <- train(headcirc ~., data = data, method = "lm",trControl = train_control5)
 print(model5)
-# Calcular métricas para model4
+# Calcular métricas para model5
 metrics_model5 <- model5$results[1, c("RMSE", "Rsquared", "MAE")]
 print(metrics_model5)
 ```
