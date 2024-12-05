@@ -1,0 +1,757 @@
+---
+title: "RA_TP4_FC"
+author: "Fernando Coz"
+date: "2023-07-08"
+output: html_document
+---
+
+## Librerias
+
+```{r}
+suppressMessages( library( dplyr ) )
+suppressMessages( library( tidyverse ) )
+suppressMessages( library( car ) )
+suppressMessages( library( GGally ) )
+suppressMessages( library( pgirmess ) )
+suppressMessages( library( nortest ) )
+suppressMessages( library( moments ) )
+suppressMessages( library( MASS ) )
+suppressMessages( library( readr ) )
+suppressMessages( library( zoo ) )
+suppressMessages( library( ggplot2 ) )
+suppressMessages( library( gridExtra) )
+suppressMessages( library( lsr ) )
+```
+
+## Funciones
+
+```{r}
+analisis_outliers <- function(v_datos) {
+
+Atributo <- colnames(v_datos[0,1:ncol(v_datos)])
+df <- data.frame(Atributo)
+df$Q1 <- NA
+df$Q3 <- NA
+df$IQR <- NA
+df$ModSup <- NA
+df$ModInf <- NA
+df$SevSup <- NA
+df$SevInf <- NA
+df$OutModSup <- ""
+df$OutModInf <- ""
+df$OutSevSup <- ""
+df$OutSevInf <- ""
+
+for (i in 1:ncol(v_datos)){
+
+  stats <- as.data.frame(t(summary(v_datos[, i])))
+  
+  q1 <- stats$Freq[stats$Var2 == "1st Qu."]
+  q3 <- stats$Freq[stats$Var2 == "3rd Qu."]
+  
+  iqr <- q3-q1
+  ModSup <- q3+(1.5*iqr)
+  ModInf <- q1-(1.5*iqr)
+  SevSup <- q3+(3*iqr)
+  SevInf <- q1-(3*iqr)
+  
+  OutModSup <- v_datos[,i][v_datos[,i]<SevInf]
+  if (length(OutModSup) == 0) {OutModSup<-'NA'} else {OutModSup <- paste(OutModSup,collapse = ",")}
+  
+  OutModInf <- v_datos[,i][v_datos[,i]<ModInf]
+  if (length(OutModInf) == 0) {OutModInf<-'NA'} else {OutModInf <- paste(OutModInf,collapse = ",")}
+  
+  OutSevSup <- v_datos[,i][v_datos[,i]>ModSup]
+  if (length(OutSevSup) == 0) {OutSevSup<-'NA'} else {OutSevSup <- paste(OutSevSup,collapse = ",")}
+  
+  OutSevInf <- v_datos[,i][v_datos[,i]>SevSup]  
+  if (length(OutSevInf) == 0) {OutSevInf<-'NA'} else {OutSevInf <- paste(OutSevInf,collapse = ",")}
+
+  df[i,2:12] <- c(q1,q3,iqr,ModSup,ModInf,SevSup,SevInf,OutModSup,OutModInf,OutSevSup,OutSevInf)
+  
+}
+  
+return(df)
+
+rm(Atributo,i,stats,q1,q3,iqr,ModSup,ModInf,SevSup,SevInf,OutModSup,OutModInf,OutSevSup,OutSevInf,v_datos,df)
+}
+```
+
+## Ejercicio 4.1
+
+Un investigador estudio el contenido en sodio de las marcas de cerveza comercializadas en Capital Federal y Gran Buenos Aires. Para ello, seleccionaron las 6 marcas más prestigiosas del mercado y eligió botellas o latas de 500ml de cada marca seleccionada y midió el contenido en sodio (en miligramos) de cada una de ellas. Los resultados de este muestreo se presentan en la siguiente tabla:
+
+### Dataset
+
+```{r}
+data <- data.frame(
+  Marca1 = c(24.4, 22.6, 23.8, 22, 24.5, 22.3, 25, 24.5),
+  Marca2 = c(10.2, 12.1, 10.3, 10.2, 9.9, 11.2, 12, 9.5),
+  Marca3 = c(19.2, 19.4, 19.8, 19, 19.6, 18.3, 20, 19.4),
+  Marca4 = c(17.4, 18.1, 16.7, 18.3, 17.6, 17.5, 18, 16.4),
+  Marca5 = c(13.4, 15, 14.1, 13.1, 14.9, 15, 13.4, 14.8),
+  Marca6 = c(21.3, 20.2, 20.7, 20.8, 20.1, 18.8, 21.1, 20.3)
+)
+
+data
+```
+
+### a) Graficar la variable observada en los grupos y analizar la presencia de outliers y la igualdad grafica de las medias y las formas de las distribuciones.
+
+```{r}
+boxplot(data)
+```
+
+```{r}
+ggpairs(data)
+```
+
+```{r}
+analisis_outliers(data)
+```
+
+### b) Calcular la media y el desvio de cada uno de los grupos. ¿Le parece que se satisface el supuesto de homogeneidad?
+
+```{r}
+media <- apply(data, 2, mean, na.rm = TRUE)
+
+desvio <- apply(data, 2, sd, na.rm = TRUE)
+
+resultados <- data.frame(Media = media, Desviacion = desvio)
+print(resultados)
+```
+
+En principio, no se satisface el supuesto de homogeneidad. Las marcas parecen tener diferente distribucion.
+
+### c) Establecer las hipótesis estadísticas de interés.
+
+H0 : µ1 = µ2 = · · · = µk
+
+H1 : µi ̸= µj para algún par (i, j)
+
+### d) Contrastar las hipótesis con un nivel α = 0,05.
+
+```{r}
+data_long <- data %>% gather(marca, sodio)
+
+dataANOVA <- aov(sodio ~ marca, data=data_long)
+summary(dataANOVA)
+```
+
+Se rechaza la hipotesis nula de igualdad de las medias. Es decir, los niveles de sodio son diferentes para cada marca de cerveza.
+
+### e) Verificar el cumplimiento de los supuestos de normalidad y homocedasticidad.
+
+```{r}
+shapiro.test(dataANOVA$residuals)
+```
+
+No se rechaza la hipotesis nula de normalidad.
+
+```{r}
+data_long$marca <-  as.factor(data_long$marca)
+leveneTest(sodio ~ marca, data = data_long)
+```
+
+No se rechaza la hipotesis nula de homocedasticidad.
+
+### f) Si se verifican concluir en el contexto del problema.
+
+```{r}
+TukeyHSD(dataANOVA,conf.level=0.95)
+```
+
+Hay evidencia suficientes para decir que la medias de la marca 3 y 6 son diferentes.
+
+## Ejercicio 4.2
+
+Para comparar cuatro suplementos "de engorde" en bovinos para carne, se seleccionaron, al azar, cuarenta animales Hereford de iguales edad y sexo, y de pesos homogéneos para ser usados en un experimento.
+
+-   suplemento 1 (S1) estuvo constituido por grano partido y fuente A
+
+-   suplemento 2 (S2) por grano partido y fuente B
+
+-   suplemento 3 (S3) por grano entero y fuente A
+
+-   suplemento 4 (S4) por grano entero y fuente B
+
+Se asignaron aleatoriamente 10 animales por suplemento, los que fueron alimentados individualmente con una dieta estándar más el correspondiente suplemento durante 80 días. La variable en estudio (o respuesta) fue la eficiencia de conversión (EfCon) individual (kg Materia Seca/ kg Ganancia de Peso) cuyos registros se presentan en la siguiente tabla:
+
+### Dataset
+
+```{r}
+data <- data.frame(
+  S1 = c(3.3, 4.4, 4.9, 4.9, 3.9, 4.2, 4.7, 5.1, 4.6, 4.5),
+  S2 = c(4.6, 4.5, 5.0, 4.0, 4.5, 5.2, 4.9, 5.5, 4.8, 5.3),
+  S3 = c(6.7, 5.8, 5.0, 4.8, 5.3, 6.2, 5.0, 6.4, 5.9, 5.4),
+  S4 = c(6.3, 6.0, 6.7, 5.5, 6.6, 6.1, 5.3, 6.5, 6.3, 6.8)
+)
+
+data
+```
+
+### a) Realice un análisis gráfico y descriptivo de la eficiencia de conversión lograda por los distintos suplementos.
+
+#### Análisis Gráfico
+
+```{r}
+boxplot(data)
+```
+
+#### Análisis Descriptivo
+
+```{r}
+media <- apply(data, 2, mean, na.rm = TRUE)
+
+desvio <- apply(data, 2, sd, na.rm = TRUE)
+
+resultados <- data.frame(Media = media, Desviacion = desvio)
+print(resultados)
+```
+
+En principio, no se satisface el supuesto de homogeneidad. Las marcas parecen tener diferente distribucion.
+
+### b) Establezca las hipótesis de interés del problema y explicite los supuestos necesarios.
+
+H0 : µ1 = µ2 = · · · = µk
+
+H1 : µi ̸= µj para algún par (i, j)
+
+H0: La eficiencia de conversión media son iguales para cada suplemento administrado.
+
+H1: la eficiencia de conversión media son diferentes para cada suplemento administrado.
+
+### c) Testee las hipótesis con nivel de significación del 5%.
+
+```{r}
+data_long <- data %>% gather(marca, sodio)
+
+dataANOVA <- aov(sodio ~ marca, data=data_long)
+summary(dataANOVA)
+```
+
+Se rechaza la hipotesis nula de igualdad de las medias. Es decir, la eficiencia de conversión media son diferentes para cada suplemento administrado.
+
+### d) Analice el cumplimiento de los supuestos del modelo.
+
+#### Normalidad
+
+```{r}
+shapiro.test(dataANOVA$residuals)
+```
+
+No se rechaza la hipotesis nula de normalidad.
+
+#### Homocedasticidad
+
+```{r}
+data_long$marca <-  as.factor(data_long$marca)
+leveneTest(sodio ~ marca, data = data_long)
+```
+
+No se rechaza la hipotesis nula de homocedasticidad.
+
+### e) Concluya en términos del problema y si rechazó H0, indique cuales medias son diferentes. Utilice para ello las comparaciones a posteriori de Tuckey.
+
+#### Tuckey
+
+```{r}
+TukeyHSD(dataANOVA,conf.level=0.95)
+```
+
+Se puede observar que existe una diferencia significativa entre S4 y S1, S4 y S2, también para S3 y S1 aunque en menor medida.
+
+## Ejercicio 4.3
+
+Se desea estudiar el efecto de una nueva droga analgésica para uso farmacéutico en pacientes con neuralgia crónica. Para ello se la compara con la aspirina y un placebo. En 30 pacientes elegidos al azar, se utiliza el método del doble ciego, asignando al azar 10 pacientes a cada tratamiento. La v.a. observada es el número de horas en que el paciente está libre de dolor después de haber sido tratado. Los resultados obtenidos fueron:
+
+### Dataset
+
+```{r}
+data <- data.frame(
+  Tratamiento = c("Placebo", "Aspirina", "Droga"),
+  Media = c(2.5, 2.82, 3.2),
+  DesviacionEstandar = c(0.13, 0.2, 0.17)
+)
+data
+```
+
+Se tienen los p valores de la Prueba de Levene(p=0.18); Prueba de Shapiro - Wilks de los residuos del modelo ( p = 0,24). Se pide:
+
+### a) Identifique la variable dependiente y el factor de interes.
+
+-   Dependiente: número de horas en que el paciente está libre de dolor después de haber sido tratado
+
+-   Factor de interes: Los diferentes tipos de tratamiento: Placebo, Aspirina y Droga
+
+### b) Escriba el modelo, en general y en términos del problema.
+
+Yij = µi + εij
+
+### c) Analice los resultados de las pruebas de hipótesis para los supuestos del modelo.
+
+No hay evidencia suficiente para rechazar la hipotesis nula de que los residuos del modelo son normales, y homocedasticos.
+
+### d) Plantee las hipótesis y construya la tabla de Anova sabiendo que SCerror = suma(ni − 1)s\^2
+
+H0 : µ1 = µ2 = · · · = µk
+
+H1 : ∃(i, j) : µi ̸= µj
+
+H0: El número de horas en que el paciente está libre de dolor es igual.
+
+H1: El número de horas en que el paciente está libre de dolor es distinto.
+
+#### SSW
+
+$$ SSW = \sum_{i=1}^{k}\left( n_{i}-1 \right)S_{i}^{2} $$
+
+```{r}
+k <- 3
+n <- 30
+
+n1 <- 10
+n2 <- 10
+n3 <- 10
+
+sd1 <- data$DesviacionEstandar[data$Tratamiento == "Placebo"]
+sd2 <- data$DesviacionEstandar[data$Tratamiento == "Aspirina"]
+sd3 <- data$DesviacionEstandar[data$Tratamiento == "Droga"]
+
+ssw <- ((n1-1)*sd1^2) + ((n2-1)*sd2^2) + ((n3-1)*sd3^2)
+
+ssw
+```
+
+#### S2p
+
+$$ S\^{2}\_{p}=\frac{SSW}{n-k} $$
+
+```{r}
+s2p <- ssw/(n1+n2+n3-k)
+s2p
+```
+
+#### Media General
+
+$$ \overline{X}_{G}=\frac{1}{n}\sum_{i=1}^{k}\left( n_{i} \overline{X}_{i} \right) $$
+
+```{r}
+mean1 <- data$Media[data$Tratamiento == "Placebo"]
+mean2 <- data$Media[data$Tratamiento == "Aspirina"]
+mean3 <- data$Media[data$Tratamiento == "Droga"]
+
+MedG <- 1/n*((n1*mean1) + (n2*mean2) + (n3*mean3))
+MedG
+```
+
+#### SSB
+
+$$ SSB=\frac{\sum_{i=1}^{k}n_{i}\left( \overline{X}_{i} -\overline{X}_{G} \right)^{2}}{k-1} $$
+
+```{r}
+ssb <- ((n1*(mean1-MedG)^2) + (n2*(mean2-MedG)^2) + (n3*(mean3-MedG)^2)) / (k-1)
+ssb
+```
+
+#### SST
+
+$$ SST = SSW + SSB $$
+
+```{r}
+sst <- ssw + ssb
+sst
+```
+
+#### F
+
+$$ F = \frac{\frac{\sum_{i=1}^{k}n_{i}\left( \overline{X}_{i} -\overline{X}_{G} \right)^{2}}{k-1}}{S^{2}_{p}} = \frac{SSB}{SSW} $$
+
+```{r}
+F <- ssb/ssw
+F
+```
+
+#### Grados Libertad Dependientes
+
+```{r}
+gld <- k-1
+gld
+```
+
+#### Grados Libertad Residuos
+
+```{r}
+glr <- n-k
+glr
+```
+
+#### p-value
+
+```{r}
+pvalue <- 1 - pf(F,gld,glr)
+pvalue
+```
+
+#### Tabla de ANOVA
+
+```{r}
+
+rm(k,n,n1,n2,n3,sd1,sd2,sd3,ssw,s2p,mean1,mean2,mean3,MedG,ssb,sst,F,gld,glr,pvalue)
+```
+
+### e) Compare los tratamientos y utilizando un test t con nivel global 0.05 es decir que como son 3 comparaciones α = 0,05/3 para cada una.
+
+```{r}
+
+```
+
+### f) Adicionalmente se indagó a los pacientes sobre efectos colaterales gástricos como respuesta al tratamiento. Los encuestados respondieron según una escala entre 0 y 5 (0 = nunca, 5= siempre). Los resultados obtenidos fueron:
+
+```{r}
+data <- data.frame(
+  Tratamiento = c(rep("Placebo", 10), rep("Aspirina", 10), rep("Droga", 10)),
+  Horas = c(0, 3, 2, 3, 4, 2, 2, 3, 1, 1, 1, 4, 3, 0, 2, 3, 4, 5, 2, 3, 4, 5, 4, 2, 3, 4, 1, 5, 3, 0)
+)
+
+print(data)
+```
+
+#### I) ¿Cree que los investigadores deberían utilizar la misma prueba estadística que la empleada para comparar el tiempo libre de dolor? Justifique.
+
+```{r}
+kruskal.test(Horas ~ Tratamiento, data = data)
+```
+
+```{r}
+kruskalmc(data$Horas ~ data$Tratamiento)
+```
+
+#### II) ¿Cuáles son las conclusiones de este estudio?
+
+No hay evidencia suficiente para decir que los 3 tratamientos producen efectos colaterales gástricos diferentes.
+
+## Ejercicio 4.4
+
+Se está estudiando el tiempo de cocción de un alimento antes de lanzarlo al mercado. Se han formado cuatro grupos y se les ha pedido que midan el tiempo transcurrido hasta que, según su juicio, el alimento quede a punto. Como esta sensación es subjetiva, se usa un ANOVA para estimar la varianza que presenta el experimento. Todos los grupos usan fuentes de calor y utensilios similares. Si la tabla siguiente recoge los resultados redondeados en minutos, ¿qué estimación podríamos hacer de la varianza de la población de estos alimentos? ¿Se observan diferencias entre los grupos?
+
+### Dataset
+
+```{r}
+data <- data.frame(
+  GrupoA = c(25, 36, 36, 25, 36, 16, 25, 36, 49, 36, 25),
+  GrupoB = c(121, 36, 36, 64, 36, 81, 49, 25, 64, 49, 121),
+  GrupoC = c(81, 81, 36, 9, 25, 36, 9, 49, 169, 1, 81),
+  GrupoD = c(25, 25, 36, 9, 25, 25, 9, 25, 25, 25, 25)
+)
+
+data
+```
+
+```{r}
+datalong <- data %>% 
+  gather(key = "Grupo", value = "Minuto")
+datalong
+```
+
+### a) Grafique los tiempos de cocción por tratamiento. Calcule las medidas resumen de los mismos.
+
+```{r}
+boxplot(data)
+```
+
+```{r}
+ggpairs(data)
+```
+
+```{r}
+summary(data)
+```
+
+```{r}
+analisis_outliers(data)
+```
+
+### b) Establezca las hipótesis de interés, escriba el modelo detallando los supuestos.
+
+### c) Realice la prueba y el diagnostico correspondiente. ¿Son válidos los resultados de la prueba?
+
+```{r}
+datalong$Grupo <- as.factor(datalong$Grupo)
+
+dataANOVA <-  aov(Minuto ~ Grupo, data =datalong)
+
+summary(dataANOVA)
+```
+
+Aplicando ANOVA el p-valor=0.0145 es \<0.05, por lo tanto, si se verifican los supuestos de normalidad y homogeneidad de la varianza será válido decir que se rechaza que las medias de cada grupo son todas iguales entre sí. Es decir, hay al menos un par que difieren, por lo tanto los porcentajes de algodón influyen sobre la resistencia.
+
+Veamos si se cumplen los supuestos necesarios para aplicar ANOVA.
+
+#### Normalidad
+
+```{r}
+shapiro.test(dataANOVA$residuals)
+```
+
+```{r}
+ad.test(residuals(dataANOVA))
+```
+
+```{r}
+agostino.test(residuals(dataANOVA))
+```
+
+Se rechaza la hipotesis nula. La distribucion no es normal.
+
+### d) Si respondió afirmativamente en c) concluya en el contexto del problema. Si concluyo negativamente intente una transformación de potenciaconveniente para normalizar y/o homocedastizar la variable respuesta.
+
+```{r}
+bc <- boxcox(Minuto ~ Grupo, lambda= -2:2, data =datalong)
+```
+
+### e) Realice nuevamente la prueba si fuera necesario y el diagnóstico del modelo correspondiente. Concluya en términos del problema.
+
+```{r}
+lambda <- bc$x[ which.max(bc$y) ]
+
+lambda
+```
+
+```{r}
+MinutoB <- (((datalong$Minuto^lambda)-1)/lambda)
+```
+
+```{r}
+dataANOVA2 <-  aov(MinutoB ~ Grupo, data=datalong)
+summary(dataANOVA2)
+```
+
+Que da lo mismo que hacer:
+
+```{r}
+dataANOVA3 <-  aov(Minuto^lambda ~ Grupo, data=datalong)
+summary(dataANOVA3)
+```
+
+Se rechaza la prueta de hipotesis de igualdad de medias. Se vuelve a probar si se cumplen los supuestos:
+
+**NORMALIDAD**
+
+```{r}
+shapiro.test(dataANOVA2$residuals)
+```
+
+Sigo rechazando la normalidad. Por ende, voy a la opcion no parametrica de Kruskal Wallis.
+
+### f) Compare los resultados con los del test no paramétrico.
+
+#### Kruskall Wallis
+
+```{r}
+kruskal.test(Minuto ~ Grupo, data = datalong)
+```
+
+```{r}
+kruskalmc(datalong$Minuto ~ datalong$Grupo)
+```
+
+Como conclusion: Atento a que las distribuciones de los grupos son diferentes, y que el p valor de la prueba de KW es menor a 0.05, se rechaza la hipotesis nula, que en este caso, significa que las distribuciones entre los grupos no son todas iguales.
+
+La distribucion del tiempo de coccion, no es la misma en todos los grupos.
+
+## Ejercicio 4.5
+
+Se pretende evaluar el efecto de la humedad en el suelo sobre la germinación de las semillas considerando el factor de cobertura. La base de datos semillas.xlsx contiene 48 registros de germinaciones con diferente porcentaje de humedad del suelo, con y sin cobertura del cultivo y proporción de germinación de las semillas.
+
+### Dataset
+
+```{r}
+
+semillas <- read_delim("https://raw.githubusercontent.com/ferdcoz/mcd-reg-adv/main/datasets/semillas.csv", 
+    delim = ";", escape_double = FALSE, trim_ws = TRUE)
+```
+
+```{r}
+semillas$humedad <- as.factor(semillas$humedad)
+semillas$cobertura <- as.factor(semillas$cobertura)
+```
+
+Verifico si el dataset posee NAs
+
+```{r}
+summary(semillas)
+```
+
+```{r}
+replace_na_with_mean <- function(data) {
+  for (col in colnames(data)) {
+    col_mean <- mean(data[[col]], na.rm = TRUE)
+    data[[col]][is.na(data[[col]])] <- col_mean
+  }
+  return(data)
+}
+
+semillas1 <- replace_na_with_mean(semillas)
+```
+
+### a) Analice la proporción de germinación global.
+
+```{r}
+p1 <- ggplot(data = semillas1, mapping = aes(x = humedad, y = germ)) + geom_boxplot() + 
+  theme_bw() 
+p2 <- ggplot(data = semillas1, mapping = aes(x = cobertura, y = germ)) + geom_boxplot() + 
+  theme_bw() 
+p3 <- ggplot(data = semillas1, mapping = aes(x = humedad, y = germ, colour = cobertura)) + 
+  geom_boxplot() + theme_bw() 
+
+grid.arrange(p1, p2, ncol = 2)
+p3
+```
+
+### b) Estudie si hay asociación entre la humedad y la germinación.
+
+```{r}
+with(data = semillas1, expr = tapply(germ, humedad, mean))
+```
+
+```{r}
+with(data = semillas1, expr = tapply(germ, humedad, sd))
+```
+
+```{r}
+with(data = semillas1, expr = tapply(germ, cobertura, mean))
+```
+
+```{r}
+with(data = semillas1, expr = tapply(germ, cobertura, sd))
+```
+
+### c) Analice si la germinación depende de la cobertura y si hay interacción entre los dos factores.
+
+```{r}
+with(data = semillas1, expr = tapply(germ, list(cobertura, humedad), mean))
+```
+
+```{r}
+with(data = semillas1, expr = tapply(germ, list(cobertura, humedad), sd))
+```
+
+```{r}
+interaction.plot(trace.factor = semillas1$humedad, 
+                 x.factor = semillas1$cobertura, 
+                 response = semillas1$germ, 
+                 fun = "mean", 
+                 legend = TRUE, 
+                 col = 2:3, 
+                 type = "b") 
+```
+
+```{r}
+interaction.plot(trace.factor = semillas1$cobertura, 
+                 x.factor = semillas1$humedad, 
+                 response = semillas1$germ, 
+                 fun = "mean", 
+                 legend = TRUE, 
+                 col = 2:3, 
+                 type = "b") 
+```
+
+### d) Construya un modelo que permita explicar la relación de los dos factores con el porcentaje de germinación.
+
+```{r}
+anova_2vias <- aov(formula = germ ~ cobertura*humedad, data = semillas1) 
+summary(anova_2vias)
+```
+
+La humedad y la interaccion de la humedad y la cobertura son significativas.
+
+### e) Utilice los efectos y las comparaciones a posteriori para realizar una recomendación.
+
+```{r}
+etaSquared(anova_2vias)
+```
+
+```{r}
+par(mfrow = c(2,2)) 
+plot(anova_2vias)
+```
+
+## Ejercicio 4.6
+
+Se pretende estudiar la eficacia, medida por un score, de un medicamento considerando las combinaciones de dos factores: el género (masculino
+
+y femenino) y la edad categorizada (joven, adulto). Se quiere analizar si el efecto es diferente entre alguno de los niveles de cada variable por si sola o en
+
+combinación. Los datos están en el archivo eficacia.xlsx.
+
+### Dataset
+
+```{r}
+eficacia <- read_csv("https://raw.githubusercontent.com/ferdcoz/mcd-reg-adv/main/datasets/eficacia.csv")
+```
+
+### a) Explorar visualmente las medias por las distintas combinaciones de los factores considerados.
+
+```{r}
+p1 <- ggplot(data = eficacia, mapping = aes(x = sexo, y = score_eficacia)) + geom_boxplot() + 
+  theme_bw() 
+p2 <- ggplot(data = eficacia, mapping = aes(x = edad, y = score_eficacia)) + geom_boxplot() + 
+  theme_bw() 
+p3 <- ggplot(data = eficacia, mapping = aes(x = sexo, y = score_eficacia, colour = edad)) + 
+  geom_boxplot() + theme_bw() 
+
+grid.arrange(p1, p2, ncol = 2)
+
+p3
+```
+
+El medicamento es mas eficaz en el hombre cuando es adulto, que cuando es joven. Por otro lado, en las mujeres es mas eficaz el medicamento cuando son jovenes que cuando son adultas. Parece haber interaccion entre las variables sexo y edad para evaluar la eficacia del medicamento.
+
+### b) Valorar visualmente la presencia de interacción.
+
+```{r}
+interaction.plot(trace.factor = eficacia$edad, 
+                 x.factor = eficacia$sexo, 
+                 response = eficacia$score_eficacia, 
+                 fun = "mean", 
+                 legend = TRUE, 
+                 col = 2:3, 
+                 type = "b") 
+```
+
+```{r}
+interaction.plot(trace.factor = eficacia$sexo, 
+                 x.factor = eficacia$edad, 
+                 response = eficacia$score_eficacia, 
+                 fun = "mean", 
+                 legend = TRUE, 
+                 col = 2:3, 
+                 type = "b") 
+```
+
+### c) Construir un modelo y estimar los coeficientes del mismo. Interpretar los coeficientes y el efecto.
+
+```{r}
+anova_2vias <- aov(formula = score_eficacia ~ sexo*edad, data = eficacia) 
+summary(anova_2vias)
+```
+
+Como conclusion del anova, la variable sexo no es significativa, por lo que no sirve para explicar la eficacia del medicamento.
+
+La variable edad, es algo significativa, pero no tanto.
+
+No obstante, la interaccion entre ambas variables si es significativa.
+
+```{r}
+etaSquared(anova_2vias)
+```
+
+El estadıstico de eta cuadrado parcial (η\^2p) es la proporcion de varianza explicada por el efecto (efecto de A, efecto de B o efecto de interaccion AB) mas la del error que se puede atribuir a dicho efecto o fuente de varianza
+
+Considerando la interaccion, se explica el 35% de la varianza. La vaiable sexo, explica solo el 7%, lo cual es razonable ya que la variable no era significativa.
+
+```{r}
+par(mfrow = c(2,2)) 
+plot(anova_2vias)
+```

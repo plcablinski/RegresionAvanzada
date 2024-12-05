@@ -1,0 +1,139 @@
+---
+title: An R Markdown document converted from "C:/MCD/mcd-reg-adv/tps/tp1/RA_TP1_EJ1_4_FC.ipynb"
+output: html_document
+---
+
+## Ejercicio 1.4
+
+Una empresa desarrolló un sistema de energía solar para calentar el agua para una caldera que es parte del sistema de energía del proceso productivo. Existe el interés de controlar la estabilidad del sistema, para ello se monitorea el mismo y se registran los datos cada hora. Los datos se encuentran disponibles en el archivo energia.xlsx
+
+```{r}
+library(readxl)
+library(ggplot2)
+library(dplyr)
+library(MVN)
+library(corrplot)
+library(aod)
+library(lmtest)
+library(car)
+library(MASS)
+```
+
+```{r}
+PARAM <- list()
+PARAM$HOME <- "C://Austral/mcd-reg-adv/datasets/"
+PARAM$FILE <- "energia.xlsx"
+file_name <- paste0(PARAM$HOME,PARAM$FILE)
+```
+
+```{r}
+energia <- read_excel( file_name )
+head(energia)
+```
+
+### a) Realizar el diagrama de dispersión y evaluar si un modelo de regresión lineal es adecuado
+
+```{r}
+ggplot( data = energia, aes ( x = Hora, y = Energía ) ) +
+    geom_point( colour = "blue3" ) + 
+    ggtitle( "Hora vs Energia" ) +
+    theme_bw() +
+    theme( plot.title = element_text( hjust = 0.5 ) )
+```
+
+A primera vista, un modelo de regresión lineal no parecería ser indicado debido a que se observa una nube de puntos con mucha dispersion
+
+### b) Esimar un modelo lineal y verificar la normalidad de los residuos del mismo
+
+```{r}
+modenerg1 <- lm( Energía ~ Hora, data = energia )
+summary( modenerg1 )
+```
+
+```{r}
+shapiro.test( modenerg1$residuals )
+```
+
+Se rechaza normalidad de los residuos
+
+### c) En caso de rechazar este supuesto, buscar una transformación lineal para este modelo y aplicarla
+
+```{r}
+bc <- boxcox( Energía ~ Hora, lambda = -3:2, data = energia )
+```
+
+```{r}
+lambda <- bc$x[ which.max(bc$y) ]
+lambda
+```
+
+El gráfico sugiere una transformación exponencial de -1.333
+
+Las transformaciones habituales de las variables individuales pueden escribirse mediante la familia potencial de Box-Cox:
+
+$$ y^\lambda = \dfrac{x^\lambda-1}{\lambda} \quad para \lambda \neq 0$$
+
+$$ y^\lambda = log(x) \quad para \lambda = 0$$
+
+```{r}
+#Arreglar la transformación
+modenerg2 <- lm( ( ( Energía^(lambda) - 1 ) / lambda ) ~ Hora, data = energia )
+summary( modenerg2 )
+```
+
+```{r}
+shapiro.test( modenerg2$residuals )
+```
+
+Luego de la transformación Box-Cox no rechazamos normalidad de los residuos.
+
+### d) Realizar un análisis diagnóstico del nuevo modelo y estimar un intervalo de confianza y un intervalo de predicción para 27.5 horas con ambos modelos. Comparar los intervalos
+
+#### Análisis diagnóstico del Modelo 1 (Breusk-Pagan y Durbin-Watson)
+
+```{r}
+bptest( modenerg1 ) 
+```
+
+No se rechaza hipótesis nula de homocedasticidad: es decir, no existen elementos suficientes para rechazar homocedasticidad.
+
+```{r}
+dwt( modenerg1 )
+```
+
+No se rechaza hipótesis nula de no autocorrelación.
+
+### Análisis diagnóstico del Modelo 2 (Breusk-Pagan y Durbin-Watson)
+
+```{r}
+bptest( modenerg2 )
+```
+
+No se rechaza hipótesis nula de homocedasticidad: es decir, no existen elementos suficientes para rechazar homocedasticidad.
+
+```{r}
+dwt( modenerg2 )
+```
+
+No se rechaza hipótesis nula de no autocorrelación.
+
+Conclusión: en el modelo 2 se verifican los 3 supuestos del modelo lineal.
+
+```{r}
+IC_modenerg1 <- predict( modenerg1, newdata = data.frame( Hora = 27.5 ), interval = "confidence" )
+IP_modenerg1 <- predict( modenerg1, newdata = data.frame( Hora = 27.5 ), interval = "prediction" )
+
+IC_modenerg2 <- predict( modenerg2, newdata = data.frame( Hora = 27.5 ), interval = "confidence" )
+IP_modenerg2 <- predict( modenerg2, newdata = data.frame( Hora = 27.5 ), interval = "prediction" )
+```
+
+```{r}
+IC_modenerg1
+IC_modenerg2
+```
+
+```{r}
+IP_modenerg1
+IP_modenerg2
+```
+

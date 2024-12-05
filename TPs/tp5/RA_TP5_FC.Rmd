@@ -1,0 +1,816 @@
+---
+title: "RA_TP5_FC"
+author: "Fernando Coz"
+date: "2023-07-09"
+output: html_document
+---
+
+## Librerias
+
+```{r}
+suppressMessages( library( readr ) )
+suppressMessages( library( readxl ) )
+suppressMessages( library( lmtest ) )
+suppressMessages( library( dplyr ) )
+suppressMessages( library( ggplot2 ) )
+suppressMessages( library( vcd ) )
+suppressMessages( library( ResourceSelection ) )
+suppressMessages( library( ROCR ) )
+suppressMessages( library( lmtest ) )
+suppressMessages( library( tidyr ) )
+suppressMessages( library( MASS ) )
+```
+
+## Funciones
+
+```{r}
+
+```
+
+## Ejercicio 5.1
+
+En 1986, el transbordador espacial Challenger tuvo un accidente catastrófico debido a un incendio en una de las piezas de sus propulsores. Era la vez 25 en que se lanzaba un transbordador espacial. En todas las ocasiones anteriores se habían inspeccionado los propulsores de las naves, y en algunas de ellas se habían encontrando defectos. El fichero challenger contiene 23 observaciones de las siguientes variables: defecto, que toma los valores 1 y 0 en función de si se encontraron defectos o no en los propulsores; y temp, la temperatura (en grados Fahrenheit) en el momento del lanzamiento. Los datos se encuentran en el fichero Challenger.xlsx.
+
+### Dataset
+
+```{r}
+setwd("C:/Austral/mcd-reg-adv/datasets")
+challenger <- read_excel("Challenger.xlsx")
+```
+
+### a) ¿Se puede afirmar que la temperatura influye en la probabilidad de que los propulsores tengan defectos? ¿Qué test utilizó para responder? Justifique.
+
+```{r}
+
+colores <- NULL
+colores[challenger$Incident == 0] <- 'green'
+colores[challenger$Incident == 1] <- 'red'
+
+plot(challenger$Temperature, challenger$Incident, pch = 21, bg = colores, xlab = 'Temperatura', ylab = 'Probabilidad de defectos')
+legend('bottomleft', c('No defecto', 'Si defecto'), pch = 21, col = c('green', 'red'))
+
+```
+
+Gráficamente podemos ver como la temperatura aparentemente está asociada a si tuvo fallas o no. Ahora veamos haciendo test de Wald:
+
+```{r}
+modelo.challenger <- glm(Incident ~ Temperature, data = challenger, family = "binomial") 
+summary(modelo.challenger)
+```
+
+Con nivel de signifcancia, y basandome en el test de Wald puedo rechazar la hipotesis nula y afirmar entonces que la temperatura tiene una influencia significativa en el probabilidad de falla del propulsor.
+
+### b) Interprete el valor del coeficiente estimado para temperatura en el contexto del problema.
+
+```{r}
+coef(modelo.challenger)
+```
+
+En el contexto del problema, siendo el coeficiente estimado (Temperatura) negativo, nos dice que a medida que la temperatura aumenta, hay una disminución en la probabilidad logarítimiva de defectos en los propulsores. El Challenger de hecho tuvo el accidente fatal un día muy frio.
+
+### c) ¿Para qué valores de temperatura la probabilidad estimada de que se produzcan defectos supera 0.1? y 0.5?
+
+```{r}
+temperature_0.1 <- challenger$Temperature[which.min(abs(predict(modelo.challenger, type = "response") - 0.1))]
+temperature_0.5 <- challenger$Temperature[which.min(abs(predict(modelo.challenger, type = "response") - 0.5))]
+
+plot(x = challenger$Temperature, 
+     y = challenger$Incident, 
+     col = "darkblue", 
+     main = "Probabilidad según Temperatura", 
+     xlab = "Temperatura", 
+     ylab = "Probabilidad según temperatura") 
+
+curve(predict(modelo.challenger, newdata = data.frame(Temperature = x), type = "response"), add = TRUE, col = "firebrick", lwd = 2.5)
+
+abline(h = 0.1, col = "blue", lty = 2)
+abline(h = 0.5, col = "red", lty = 2)
+
+abline(v = temperature_0.1, col = "blue", lty = 2)
+abline(v = temperature_0.5, col = "red", lty = 2)
+```
+
+## Ejercicio 5.2
+
+Consideremos los datos del archivo diabetes.xlsx. Corresponden a 146 adultos que han participado de un ensayo sobre diabetes para investigar la relación entre la presencia de diabetes y varias medidas químicas. Es importante destacar que la obesidad se consideró un criterio de exclusión. El archivo contiene las siguientes variables explicativas:
+
+-   DIABET: variable categórica 1 si es diabético y 0 si no.
+
+-   RELWT: peso relativo.
+
+-   GLUFAST: glucosa plasmática en ayunas.
+
+-   GLUTEST: prueba de glucosa en plasma.
+
+-   INSTEST: insulina plasmática durante la prueba.
+
+-   SSPG: glucosa plasmática en estado estacionario.
+
+-   GROUP: grupo clínico.
+
+### Dataset
+
+```{r}
+setwd("C:/Austral/mcd-reg-adv/datasets")
+diabetes <- read_excel("diabetes.xls")
+```
+
+### a) Obtenga los box-plots para la variable SSPG para los grupos con y sin diabetes. Compare los valores medios de ambos grupos y comente.
+
+```{r}
+ggplot(data = diabetes, 
+       mapping = aes(x = as.factor(DIABET), 
+                     y = SSPG)) +
+  xlab("Diabetes") +
+  ylab("SSPG") + 
+  geom_boxplot() + 
+  scale_x_discrete(labels = c("No", "Yes")) +
+  theme_bw() 
+```
+
+```{r}
+diabet <- factor(diabetes$DIABET)
+
+ggplot(data = diabetes,
+       aes(x = SSPG, y = diabet)) + 
+  geom_boxplot(aes(color = diabet)) + 
+  geom_point(aes(color = diabet)) + 
+  theme_bw() + theme(legend.position = "null")
+```
+
+Los valores medios de cada grupo son sustancialmente distintos a simple vista.
+
+### b) Obtenga el diagrama de dispersión de los valores observados de la variable respuesta (en el eje vertical) y la variable SSPG.
+
+```{r}
+colores <- NULL
+colores[diabetes$DIABET == 0] <- 'lightgreen'
+colores[diabetes$DIABET == 1] <- 'lightpink'
+
+plot(diabetes$SSPG, diabetes$DIABET, pch = 21, bg = colores, main = 'Scater Plot - Diabetes' , xlab = 'SSPG', ylab = 'P( Diabetes )')
+legend('bottomleft', c('Sin diabetes', 'Con diabetes'), pch = 21, col = c('lightgreen', 'lightpink'))
+```
+
+### c) Construya una tabla que contenga para cada grupo etáreo la media de la edad y la media de DIABET, que corresponde a la proporción de individuos que tienen DIABET en cada grupo. Analice.
+
+```{r}
+max_sspg <- max(diabetes$SSPG)
+
+breaks <- seq(0, max_sspg, length.out = 11)
+
+group_sspg <- cut(diabetes$SSPG, breaks = breaks, labels = FALSE, include.lowest = TRUE)
+
+mean_sspg <- tapply(diabetes$SSPG, group_sspg, mean)
+
+proportion_diabet <- tapply(diabetes$DIABET, group_sspg, mean)
+
+output_table <- data.frame(
+  Grupos = paste0(breaks[-length(breaks)], "-", breaks[-1]),
+  Media_SSPG = round(mean_sspg, 2),
+  Propor_DIABET = round(proportion_diabet, 2)
+)
+
+print(output_table)
+```
+
+### d) Ajuste un modelo para estimar diabet en función de SSPG.
+
+```{r}
+modelo.diabetes <- glm(DIABET ~ SSPG, data = diabetes, family = "binomial") 
+summary(modelo.diabetes)
+```
+
+### e) Interprete los coeficientes obtenidos en términos del problema planteado.
+
+```{r}
+coef(modelo.diabetes)
+```
+
+En el contexto del problema, siendo el coeficiente estimado (SSPG) positivo, nos dice que a medida que el SSPG aumenta, aumenta la probabilidad de poseer diabetes.
+
+### f) Para una persona con SSPG igual a 100, ¿qué valores de logit, odds y la probabilidad de tener DIABET estima el modelo? Calcúlelos.
+
+```{r}
+
+SSPG_valor <- 100
+
+logit <- coef(modelo.diabetes)[1] + coef(modelo.diabetes)[2] * SSPG_valor
+
+odds <- exp(logit)
+
+probabilidad <- odds / (1 + odds)
+
+cat("Logit:", logit, "\n")
+cat("Odds:", odds, "\n")
+cat("Probabilidad de tener Diabets: %", round(probabilidad*100,2), "\n")
+```
+
+```{r}
+SSPG_value<-100
+
+probabilidad <- predict(modelo.diabetes, data.frame(SSPG=SSPG_value), type = "response")
+cat("Probabilidad de tener Diabets: %", round(probabilidad*100,2), "\n")
+```
+
+### g) Halle un intervalo de confianza del 95% del Odds Ratio para DIABET. Interprete.
+
+```{r}
+confint(object = modelo.diabetes, level = 0.95)
+```
+
+Como el intervalo de confianza no incluye el cero, el modelo es significativo a un nivel de confianza del 95%.
+
+```{r}
+nuevos_puntos <- seq(from = min(diabetes$SSPG), to = max(diabetes$SSPG), by = 0.5) 
+```
+
+```{r}
+predicciones <- predict(modelo.diabetes, data.frame(SSPG = nuevos_puntos), se.fit = TRUE) 
+```
+
+```{r}
+predicciones_logit <- exp(predicciones$fit)/(1 + exp(predicciones$fit))
+```
+
+```{r}
+limite_inferior <- predicciones$fit - 1.96 * predicciones$se.fit 
+limite_inferior_logit <- exp(limite_inferior)/(1 + exp(limite_inferior))
+
+limite_superior <- predicciones$fit + 1.96 * predicciones$se.fit 
+limite_superior_logit <- exp(limite_superior)/(1 + exp(limite_superior))
+```
+
+```{r}
+datos_curva <- data.frame(SSPG = nuevos_puntos, 
+                          proba_SSPG = predicciones_logit, 
+                          limite_inferior_logit = limite_inferior_logit, 
+                          limite_superior_logit = limite_superior_logit)
+
+ggplot(diabetes, aes(x = SSPG, y = DIABET)) + 
+  geom_point(aes(color = as.factor(DIABET)),shape = "I", size = 3) + 
+  geom_line(data = datos_curva, aes(y = proba_SSPG), color = "brown") + 
+  geom_line(data = datos_curva, aes(y = limite_inferior_logit), linetype = "dashed") + 
+  geom_line(data = datos_curva, aes(y = limite_superior_logit), linetype = "dashed") + 
+  theme_bw() + 
+  labs(title = "Modelo regresión logística DIABET ~ SSPG", y = "P(Diabetes | SSPG)", y = "DIABET") + 
+  theme(legend.position = "null") + theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_manual(values = c("lightgreen", "lightpink"))
+```
+
+### h) Evalúe la bondad del ajuste obtenido. Para ello construya una matriz de confusión con un conjunto de validación del 30% de los datos utilizando como punto de corte bp = 0,5. Hágalo luego con otros puntos de corte.
+
+```{r}
+set.seed(666)
+
+indices_validacion <- sample(nrow(diabetes), round(0.3 * nrow(diabetes)))
+datos_entrenamiento <- diabetes[-indices_validacion, ]
+datos_validacion <- diabetes[indices_validacion, ]
+
+modelo.diabetes2 <- glm(DIABET ~ SSPG, data = datos_entrenamiento, family = "binomial")
+
+probs_validacion <- predict(modelo.diabetes2, newdata = datos_validacion, type = "response")
+
+corte <- 0.5
+
+predicciones_validacion <- ifelse(probs_validacion >= corte, 1, 0)
+
+matriz_confusion <- table(observado = datos_validacion$DIABET, predicho = predicciones_validacion)
+
+print(matriz_confusion)
+```
+
+```{r}
+mosaic(matriz_confusion, shade = TRUE, colorize = TRUE,
+       xlab = "Predicciones", ylab = "Observado",
+       main = "Matriz de Confusión",
+        gp = gpar(fill = matrix(c("darkgreen", "darkred", "darkred", "darkgreen"),2,2)))
+```
+
+### i) Realizar el test de Hosmer --Lemeshow y comentar los resultados obtenidos.
+
+```{r}
+hoslem.test(diabetes$DIABET, fitted(modelo.diabetes))
+```
+
+En este caso, no queremos rechazar el test porque la hipótesis nula H0 es que el modelo ajusta bien a los datos.
+
+### j) Estime el área bajo la curva ROC y explique el resultado.
+
+```{r}
+set.seed(123)
+indices_validacion <- sample(nrow(diabetes), round(0.2 * nrow(diabetes)))
+
+diabetes_train <- diabetes[-indices_validacion,]
+diabetes_test <- diabetes[indices_validacion,]
+```
+
+```{r}
+modelo.diabetes2 <- glm(DIABET ~ SSPG, data = diabetes_train, family = "binomial") 
+
+predicciones <- predict(object = modelo.diabetes2, newdata = diabetes_test, type = "response") 
+
+real <- diabetes_test$DIABET
+
+predic <- prediction(predicciones,real)
+perf <-  performance(predic, "tpr","fpr")
+
+plot(perf,
+     main = "Curva ROC - Diabetes",
+     xlab="Tasa de falsos positivos", 
+     ylab="Tasa de verdaderos positivos")
+abline(a=0,b=1,col="blue",lty=2)
+grid()
+auc <- as.numeric(performance(predic,"auc")@y.values)
+legend("bottomright",legend=paste(" AUC =",round(auc,4)))
+```
+
+El modelo tiene una capacidad muy buena para distinguir entre las clases positiva y negativa. Un AUC alto sugiere que el modelo es capaz de clasificar correctamente la variable de respuesta en la mayoría de los casos.
+
+## Ejercicio 5.3
+
+Utilizaremos los datos que se encuentran en el archivo bajopeso.xlsx de un estudio, cuyo objetivo era identificar factores de riesgo asociados con el bajo peso al nacimiento (menor a 2500 gramos), se registraron las variables que se presentan en la siguiente tabla en 190 mujeres en el momento del parto. Los datos están disponibles en shorturl.at/dkpyZ.
+
+-   ID: Código de Identificación.
+
+-   LOW: variable categórica que indica 1 (bajo peso al nacer) 0 (no).
+
+-   AGE: edad de la madre en años.
+
+-   LWT: peso de la madre en libras en el último periodo menstrual.
+
+-   RACE: variable categórica con niveles: 1 (blanca), 2 (negra) y 3 (otra).
+
+-   SMOKE: variable categórica con dos niveles 1(fumó durante el embarazo)y 0 (no).
+
+-   PTL: cantidad de episodios de trabajo de parto prematuro.
+
+-   HT: antecedentes de hipertensión 1 (si) y 0 (no).
+
+-   UI: presencia de irritabilidad uterina 1(si) y 0(no).
+
+-   FTV: cantidad de consultas durante el primer trimestre.
+
+### Dataset
+
+```{r}
+setwd("C:/Austral/mcd-reg-adv/datasets")
+bajo_peso <- read_excel("bajo_peso.xlsx")
+```
+
+### a) Estudie la relación entre bajo peso al nacer (LOW =1) y fumar durante el embarazo (SMOKE=1) mediante un modelo logístico.
+
+```{r}
+modelo.peso <- glm(LOW ~ SMOKE, data = bajo_peso, family = "binomial")
+summary(modelo.peso)
+```
+
+### b) Escriba la expresión del modelo ajustado e interprete los coeficientes. Es significativa la variable smoke? Básese en el test de Wald para responder a esta pregunta.
+
+La expresión del modelo logístico ajustado se puede escribir como:
+
+$$ logit_{(p)}=\beta_{0}+\beta_{1}*SMOKE $$
+
+Donde:
+
+logit(p) representa la función logit inversa de la probabilidad p de bajo peso al nacer.
+
+β₀ es el coeficiente de intersección (intercepto) del modelo.
+
+β₁ es el coeficiente asociado a la variable SMOKE.
+
+El modelo estimado con nuestros datos:
+
+$$ logit_{(p)}=-1.0871+0.7368(SMOKE) $$
+
+Interpretación:
+
+$$ logit(\widehat{p},SMOKE = 1) − logit(\widehat{p},SMOKE = 0) = 0.7368 $$
+
+$$ logit(OR,SMOKE = 1)/(OR,SMOKE = 0) = 0.7368 $$
+
+$$ \frac{OR(SMOKE = 1)}{OR(SMOKE = 0)}=e^{0.7368}=2.089 $$
+
+La oportunidad de bajo peso al nacer del hijo de una madre fumadora es **2.089** veces esa oportunidad para una madre no fumadora. Se estima un
+
+aumento del 108.9% del odds de bajo peso al nacer entre las madres que fuman en comparación con las que no fuman.
+
+Resultado:
+
+Como el valor p asociado al coeficiente β₁ en el test de Wald es menor que α = 0.05, se rechaza la hipótesis nula y se concluye que la variable SMOKE es significativa en el modelo.
+
+### c) Construya la matriz de confusión para un conjunto de validación de un tercio de la base.
+
+```{r}
+set.seed(666)
+
+indices_validacion <- sample(nrow(bajo_peso), round(0.3 * nrow(bajo_peso)))
+datos_entrenamiento <- bajo_peso[-indices_validacion, ]
+datos_validacion <- bajo_peso[indices_validacion, ]
+
+modelo.peso2 <- glm(LOW ~ SMOKE, data = datos_entrenamiento, family = "binomial")
+
+probs_validacion <- predict(modelo.peso2, newdata = datos_validacion, type = "response")
+
+corte <- 0.4
+
+predicciones_validacion <- ifelse(probs_validacion >= corte, 1, 0)
+
+matriz_confusion <- table(observado = datos_validacion$LOW, predicho = predicciones_validacion)
+
+print(matriz_confusion)
+```
+
+```{r}
+mosaic(matriz_confusion, shade = TRUE, colorize = TRUE,
+       xlab = "Predicciones", ylab = "Observado",
+       main = "Matriz de Confusión",
+        gp = gpar(fill = matrix(c("darkgreen", "darkred", "darkred", "darkgreen"),2,2)))
+```
+
+Para un corte de del \>=50% el modelo no logra predecir correctamente. No es bueno y podriamos probar armar una interacción con una nueva variable.
+
+### d) Testee basándose en la verosimilitud este modelo versus otro que considere también la edad de la madre. Interprete los resultados.
+
+```{r}
+modelo.peso3 <- glm(LOW ~ SMOKE + AGE, data = datos_entrenamiento, family = "binomial")
+
+probs_validacion <- predict(modelo.peso3, newdata = datos_validacion, type = "response")
+
+corte <- 0.5
+
+predicciones_validacion <- ifelse(probs_validacion >= corte, 1, 0)
+
+matriz_confusion <- table(observado = datos_validacion$LOW, predicho = predicciones_validacion)
+
+print(matriz_confusion)
+```
+
+```{r}
+mosaic(matriz_confusion, shade = TRUE, colorize = TRUE,
+       xlab = "Predicciones", ylab = "Observado",
+       main = "Matriz de Confusión",
+        gp = gpar(fill = matrix(c("darkgreen", "darkred", "darkred", "darkgreen"),2,2)))
+```
+
+```{r}
+# Verosimilitud
+lrtest<-lrtest(modelo.peso2, modelo.peso3)
+lrtest
+```
+
+Dado que el p valor es mayor al umbral de significación (α = 0.05), no se rechaza la hipótesis nula y se concluye que el modelo que incluye tanto "SMOKE" como "AGE", no es significativamente mejor que el modelo que solo contempla la variable de fumar. La variable "AGE" no aporta información adicional para predecir el bajo peso al nacer más allá de la variable "SMOKE".
+
+## Ejercicio 5.4
+
+Ejercicio 5.4. El 4 de julio de 1999 una tormenta con vientos que excedían los 145 kilómetros por hora azotó el nordeste de Minnesota, en EEUU, causando graves daños en un parque natural de la zona. Los científicos analizaron los efectos de la tormenta determinando para más de 3600 árboles del parque, su diámetro en cm, una medida de la severidad local de la tormenta relacionada con el porcentaje inerte de área basal de cuatro especies, una variable que registraba si cada árbol había muerto (Y=1) o si había soportado la tormenta (Y=0) y finalmente la especie a la que pertenecía cada árbol. Estos datos se encuentran en el archivo tormenta.xlsx disponibles en shorturl.at/ACFHN. Fueron analizados por Weisberg et al. (2005).
+
+### Dataset
+
+```{r}
+setwd("C:/Austral/mcd-reg-adv/datasets")
+tormenta <- read_excel("tormenta.xlsx")
+```
+
+### a) Hay alguna especie que le parece que sobrevivió más que otra? Considera que la supervivencia se asocia con la severidad de la tormente? y con el diámetro del árbol?
+
+```{r}
+boxplot(tormenta$severidad ~ tormenta$murio, data = tormenta, 
+        xlab = "Supervivencia", ylab = "Severidad",
+        main = "Supervivencia en relación con la severidad",
+        names = c("Sobrevivió", "Murió"),
+        col = c("lightblue", "lightpink"))
+```
+
+```{r}
+boxplot(tormenta$diametro ~ tormenta$murio, data = tormenta, 
+        xlab = "Supervivencia", ylab = "Diámetro",
+        main = "Supervivencia en relación con el diametro",
+        names = c("Sobrevivió", "Murió"),
+        col = c("lightblue", "lightpink"))
+```
+
+```{r}
+Sobrevivio <- factor(tormenta$murio, levels = c(0, 1), labels = c("Si", "No"))
+
+ggplot(data = tormenta, aes(x = especie, y = diametro)) + 
+  geom_boxplot(aes(fill = Sobrevivio), width = 0.8) + 
+  scale_fill_manual(values = c("lightblue", "lightpink")) +
+  theme_bw()
+```
+
+```{r}
+ggplot(data = tormenta, aes(x = especie, y = severidad)) + 
+  geom_boxplot(aes(fill = Sobrevivio), width = 0.8) + 
+  scale_fill_manual(values = c("lightblue", "lightpink")) +
+  theme_bw()
+```
+
+```{r}
+library(data.table)
+
+dt <- as.data.table(tormenta)
+conteo_especie <- dt[, .N, by = .(especie, Sobrevivio)]
+
+# Crear el barplot
+ggplot(data = conteo_especie, aes(x = especie, y = N, fill = Sobrevivio)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+  geom_text(aes(label = N), position = position_dodge(width = 0.7), vjust = -0.5) +
+  scale_fill_manual(values = c("lightblue", "lightpink")) +
+  xlab("Especie") +
+  ylab("Cantidad") +
+  ggtitle("Cantidad de sobrevivientes y no sobrevivientes por especie") +
+  theme_bw()
+```
+
+Hay especies que notablemente sobrevivieron mas que otras, por ejemplo: BA, BF, C, PB, RM y RP.
+
+La supervivencia por otro lado, se asocia mas con la severidad de la tormenta que con el diámetro aunque puede considerarse también asociada ya que a mayor diámetro menores son las posibilidades de que sufra daños.
+
+### b) Proponga un modelo que sólo utilice como predictora la variable diámetro. Halle la bondad de ajuste y la precisión de la predicción lograda.
+
+```{r}
+modelo.tormenta <- glm(murio ~ diametro, data = tormenta, family = "binomial")
+summary(modelo.tormenta)
+```
+
+```{r}
+predicciones <- predict(modelo.tormenta, type = "response")
+
+hoslem.test(tormenta$murio, predicciones)
+```
+
+En este caso, no queremos rechazar el test porque la hipótesis nula H0 es que el modelo ajusta bien a los datos.
+
+```{r}
+predicciones_binarias <- ifelse(predicciones >= 0.5, 1, 0)
+
+precision <- mean(predicciones_binarias == tormenta$murio)
+
+cat("Precisión de la predicción:", precision, "\n")
+```
+
+### c) Proponga un segundo modelo que considere como predicotras al diámetro y a la severidad de la tormenta. Halle la bondad de ajuste y la precisión de la predicción lograda.
+
+```{r}
+modelo.tormenta2 <- glm(murio ~ diametro + severidad, data = tormenta, family = "binomial")
+summary(modelo.tormenta2)
+```
+
+```{r}
+hoslem.test(tormenta$murio, fitted(modelo.tormenta2))
+```
+
+En este caso, no rechazamos el test porque la hipótesis nula H0 es que el modelo ajusta bien a los datos.
+
+```{r}
+predicciones <- predict(modelo.tormenta2, type = "response")
+
+predicciones_binarias <- ifelse(predicciones >= 0.5, 1, 0)
+
+precision <- mean(predicciones_binarias == tormenta$murio)
+
+cat("Precisión de la predicción:", precision, "\n")
+```
+
+Mejoró respecto al primer modelo que solo consideraba el diámetro.
+
+### d) Compare ambos modelos considerando la verosimilitud, la bondad de ajuste y el área bajo la curva ROC de cada uno.
+
+#### Verosimilitud
+
+```{r}
+# Verosimilitud
+lrtest<-lrtest(modelo.tormenta, modelo.tormenta2)
+lrtest
+```
+
+Los resultados del test de verosimilitud sugieren que el Modelo 2, que incluye tanto el diámetro como la severidad como predictores, es significativamente mejor que el Modelo 1, que solo incluye el diámetro como predictor. La adición de la variable "Severidad" mejora el ajuste del modelo y proporciona una mejor explicación de la variable de respuesta "murio".
+
+#### Bondad de ajuste
+
+```{r}
+hoslem.test(tormenta$murio, fitted(modelo.tormenta))
+hoslem.test(tormenta$murio, fitted(modelo.tormenta2))
+```
+
+Los resultados del test de Hosmer-Lemeshow indican que el Modelo 1 muestra una falta significativa de ajuste, mientras que el Modelo 2 se ajusta adecuadamente a los datos. Esto implica que el Modelo 2, que incluye tanto el diámetro como la severidad como predictores, tiene una mejor bondad de ajuste en comparación con el Modelo 1.
+
+#### AUC-ROC
+
+```{r}
+set.seed(666)
+entrenamiento <- sample(1:100,70)
+validacion <- c(1:100)[-entrenamiento]
+
+tormenta_train <- tormenta[entrenamiento,]
+tormenta_test <- tormenta[validacion,]
+
+modelo.tormenta1 <- glm(murio ~ diametro + severidad, data = tormenta_train, family = "binomial")
+modelo.tormenta2 <- glm(murio ~ diametro, data = tormenta_train, family = "binomial")
+
+predicciones1 <- predict(object = modelo.tormenta1, newdata = tormenta_test, type = "response")
+predicciones2 <- predict(object = modelo.tormenta2, newdata = tormenta_test, type = "response")
+
+real <- tormenta_test$murio
+```
+
+```{r}
+pred.obj1 <- prediction(predicciones1, real)
+pred.obj2 <- prediction(predicciones2, real)
+
+roc1 <- performance(pred.obj1, "tpr", "fpr")
+roc2 <- performance(pred.obj2, "tpr", "fpr")
+
+auc1 <- as.numeric(performance(pred.obj1, "auc")@y.values)
+auc2 <- as.numeric(performance(pred.obj2, "auc")@y.values)
+
+# Crear el gráfico de la curva ROC
+plot(roc1, col = "blue", main = "Curva ROC - Modelos Tormenta", print.auc = TRUE, text.adj=c(-0.2,1.7))
+plot(roc2, col = "red", add = TRUE)
+abline(a=0,b=1,col="gray",lty=2)
+grid()
+legend("bottomright", legend = c(paste("Modelo 1 (AUC =", round(auc1, 4), ")"),
+                                 paste("Modelo 2 (AUC =", round(auc2, 4), ")")),
+       col = c("blue", "red"), lwd = 2)
+```
+
+### e) Estimar la probabilidad de que no sobreviva un árbol cuyo diámetro es de 30 cm y esté situado en una zona en la que la fuerza de la tormenta viene dada por S=0.8.
+
+```{r}
+diametro <- 30
+severidad <- 0.8
+
+nuevo_datos <- data.frame(Diametro = diametro, Severidad = severidad)
+
+proba.supervivencia <- 1 - predict(modelo.tormenta2, newdata = nuevo_datos, type = "response")
+
+cat("La probabilidad estimada de que un árbol con diámetro de", diametro, "cm y severidad de", severidad, "no sobreviva es:", proba.supervivencia, "\n")
+```
+
+### f) Compare la precisión del mejor de los modelos con un análisis discriminante lineal y con un análisis discriminante cuadrático.
+
+```{r}
+modelo_lda <- lda(murio ~ diametro + severidad, data = tormenta_train)
+predicciones_lda <- predict(modelo_lda, newdata = tormenta_test)$class
+
+modelo_qda <- qda(murio ~ diametro + severidad, data = tormenta_train)
+predicciones_qda <- predict(modelo_qda, newdata = tormenta_test)$class
+
+precision_lda <- mean(predicciones_lda == tormenta_test$murio)
+precision_qda <- mean(predicciones_qda == tormenta_test$murio)
+
+cat("Precisión del Modelo 2:", precision, "\n")
+cat("Precisión del LDA:", precision_lda, "\n")
+cat("Precisión del QDA:", precision_qda, "\n")
+```
+
+## Ejercicio 5.5
+
+Se ha conducido un estudio acerca de cáncer de próstata. Se analizó una base de una muestra aleatoria de 100 pacientes masculinos. Los datos
+
+corresponden al archivo prostata.xlsx. Sobre cada paciente se le han medido las siguientes variables o características:
+
+-   **volumen_pros**: volumen de la próstata estimado.
+
+-   **peso_pros**: peso de la próstata estimado.
+
+-   **penetrac_capsular**: variable categórica que indica invasión de la cápsula.
+
+-   **invade_vesic_semin**: variable categórica que indica invasión de la vesícula seminal.
+
+-   **gleason**: Indicador de características de agresividad de las células.
+
+-   **Edad**: edad del paciente.
+
+-   **log_psa**: Logaritmo natural del indicador de antígeno prostático.
+
+### Dataset
+
+```{r}
+setwd("C:/Austral/mcd-reg-adv/datasets")
+prostata <- read_delim("prostata.csv", 
+    delim = ";", escape_double = FALSE, trim_ws = TRUE)
+```
+
+### a) Construye un modelo de regresión logística a fin de establecer una relación que permita predecir la presencia de invasión de las vesículas seminales.
+
+```{r}
+modelo.prosta <- glm(invade_vesic_semin ~ ., data = prostata, family = "binomial")
+summary(modelo.prosta)
+```
+
+### b) Seleccione la/s variable/s adecuadas para informar cual/es de las variables incluidas en el modelo inicial son significativas.
+
+Estos valores p sugieren que la variable "penetrac_capsular" y "log_psa" son significativas en el modelo, lo que implica que tienen una relación estadísticamente significativa con la presencia de invasión de las vesículas seminales en el cáncer de próstata.
+
+### c) Escriba la expresión del modelo final si solo se incluyeran en el las variables que resultaron significativas.
+
+$$ \text{Invade_vesic_semin }= β_{0}+β_{1}⋅\text{penetrac_capsular}+β_{2}⋅\text{log_psa} $$
+
+### d) Pruebe interacciones dobles e incluya alguna en el modelo si resulta significativa.
+
+```{r}
+modelo.interaccion <- glm(invade_vesic_semin ~ penetrac_capsular + log_psa + 
+                            penetrac_capsular*log_psa, 
+                          data = prostata, 
+                          family = "binomial")
+summary(modelo.interaccion)
+```
+
+```{r}
+modelo.interaccion.todas <- glm(invade_vesic_semin ~ penetrac_capsular + log_psa + 
+                            penetrac_capsular*log_psa +
+                            volumen_pros*log_psa,
+                          data = prostata, 
+                          family = "binomial")
+summary(modelo.interaccion.todas)
+```
+
+### e) Considerando como valor de corte 0.5 cómo clasificaría un individuo que tuvo tiene Gleason 4 y penetración capsular.
+
+```{r}
+
+```
+
+## Ejercicio 5.6
+
+Una población de mujeres que tenían al menos 21 años de edad, descendientes de indígenas pima y que vivían cerca de Phoenix, Arizona, se sometieron a pruebas de diabetes de acuerdo con los criterios de la Organización Mundial de la Salud. Los datos fueron recopilados por el Instituto Nacional de Diabetes y Enfermedades Digestivas y Renales de EE. UU. Usamos los 532 registros completos después de descartar los datos (principalmente faltantes) sobre la insulina sérica. La base está disponible en la biblioteca Mass de R con el nombre Pima.tr.
+
+Las variables de la base son:
+
+-   **npreg**: cantidad de embarazos
+
+-   **glu**: concentración de glucosa plasmática en un test de tolerancia a la glucosa.
+
+-   bp: presión diastólica (mm Hg).
+
+-   **skin**: Grosor del pliegue cutáneo del tríceps (mm)
+
+-   **bmi**: índice de masa corporal (peso en kg/ estatura en m al cuadrado )
+
+-   **ped**: función de diabetes
+
+-   **age**: edad en años
+
+-   **type**: variable categórica de grupo de diabetes según el criterio de la OMS.
+
+### Dataset
+
+```{r}
+mujeres <- as.data.frame(Pima.tr)
+```
+
+### a) Ajustar un modelo logístico considerando como variable predictora el bmi y como respuesta type. Utilizar el test de razón de verosimilitudes para evaluar la significación del modelo, comparándolo con el modelo nulo.
+
+```{r}
+modelo.bmi <- glm(type ~ bmi, data = mujeres, family = binomial)
+
+modelo_nulo <- glm(type ~ 1, data = mujeres, family = binomial)
+
+lr_test <- anova(modelo.bmi, modelo_nulo, test = "LRT")
+
+print(lr_test)
+```
+
+```{r}
+lrtest<-lrtest(modelo.bmi, modelo_nulo)
+lrtest
+```
+
+Rachazo la hipotesis nuela y se concluye que el modelo ajustado no es mejor que el modelo nulo y que la variable predictora (BMI) tiene un efecto significativo en la respuesta (type).
+
+### b) Defina una variable categórica que separe a las mujeres que no han tenido embarazos previos de las que sí. Ajuste un modelo para evaluar si esta variable es significativa para predecir type.
+
+```{r}
+mujeres$previous_pregnancies <- ifelse(mujeres$npreg > 0, "Sí", "No")
+
+modelo.preg <- glm(type ~ previous_pregnancies, data = mujeres, family = binomial)
+
+modelo_nulo <- glm(type ~ 1, data = mujeres, family = binomial)
+lr_test <- anova(modelo.preg, modelo_nulo, test = "LRT")
+
+print(lr_test)
+```
+
+No rechazo la hipotesis nula, por lo que el modelo con la nueva variable incluida es mejor que el modelo nulo para predecir type.
+
+### c) Ajuste un modelo utilizando en este caso como predictoras la edad, la variable categórica definida en el item anterior y el bmi.
+
+```{r}
+modelo3 <- glm(type ~ age + previous_pregnancies + bmi, data = mujeres, family = "binomial")
+```
+
+### d) Ajuste un modelo utilizando en este caso como predictoras la edad, el bmi y el número de embarazos previos.
+
+```{r}
+modelo4 <- glm(type ~ age + bmi + npreg, data = mujeres, family = "binomial")
+```
+
+### e) Seleccione el mejor modelo mediante el test de razón de verosimilitudes.
+
+```{r}
+lrtest<-lrtest(modelo.bmi, modelo_nulo, modelo.preg, modelo3, modelo4)
+lrtest
+```
+
+Según los resultados del test de razón de verosimilitudes, el Model 5 (type \~ age + bmi + npreg) parece ser el mejor modelo, ya que es significativamente mejor que el modelo nulo y tiene el p valor mas bajo. Esto sugiere que la edad, el BMI y el número de embarazos previos son predictores significativos para predecir ell grupo de diabetes según el criterio de la OMS.

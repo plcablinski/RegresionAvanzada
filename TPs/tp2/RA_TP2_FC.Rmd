@@ -1,0 +1,839 @@
+---
+title: "RA_TP2_FC"
+author: "Fernando Coz"
+date: "2023-06-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "C://Austral/mcd-reg-adv")
+```
+
+## Librerias
+
+```{r}
+suppressMessages( library(readxl) )
+suppressMessages( library(readr) )
+suppressMessages( library(ggplot2) )
+suppressMessages( library(dplyr) )
+suppressMessages( library(corrplot) )
+suppressMessages( library(MVN) )
+suppressMessages( library(sandwich) )
+suppressMessages( library(MASS) )
+suppressMessages( library(leaps) )
+suppressMessages( library(ggpubr) )
+suppressMessages( library(carData) )
+suppressMessages( library(caret) )
+suppressMessages( library(Brq) )
+suppressMessages( library(tidyverse) )
+suppressMessages( library(nortest) )
+suppressMessages( library(car) )
+suppressMessages( library(MASS) )
+suppressMessages( library(robustbase) )
+suppressMessages( library(quantreg) )
+```
+
+## Funciones
+
+```{r}
+test_supuestos <- function( my_model, nivel_significancia = 0.05 ) {
+  
+suppressMessages( require(lmtest) )
+suppressMessages( require(car) )
+  
+  #Shapiro Test
+  t_sha <- shapiro.test( my_model$residuals )
+  t_sha_obs <- ifelse( t_sha$p.value > nivel_significancia,
+                       "Los residuos son normales.",
+                       "Los residuos NO son normales.")
+  
+  #BP Test
+  t_bp <- bptest( my_model )
+  t_bp_obs <- ifelse( unname(t_bp$p.value) > nivel_significancia,
+                     "Homocedasticidad. La varianza de los residuos es constante.",
+                     "Heterocedasticidad. La varianza de los residuos NO es constante.")
+  
+  #Durbin-Watson Test
+  t_dwt <- durbinWatsonTest( my_model )
+  t_dwt_obs <- ifelse( t_dwt$p > nivel_significancia,
+                      "No hay autocorrelación. Los residuos son independientes.",
+                      "Hay autocorrelación. Los residuos NO son independientes.")
+  
+  resultados <- data.frame(
+    Prueba = c("Shapiro", "Breusch-Pagan", "Durbin-Watson"),
+    P_Value = c(t_sha$p.value, unname(t_bp$p.value), t_dwt$p)
+  )
+  
+  resultados$H0 <- ifelse( resultados$P_Value > nivel_significancia, "No rechazada", "Rechazada" )
+  resultados$Observaciones <- ifelse( resultados$Prueba == "Shapiro", t_sha_obs,
+                                     ifelse( resultados$Prueba == "Breusch-Pagan", t_bp_obs, t_dwt_obs ) )
+
+  return(resultados)
+}
+```
+
+## Ejercicio 2.1
+
+Con el set de datos trees, disponible en la biblioteca dplyr de R, pretendemos ajustar un modelo que estimo el volumen (en pies cúbicos) de los árboles de cerezo en función de la longitud de su circunferencia (en pulgadas) y de su altura (en pies).
+
+### Dataset
+
+```{r}
+trees
+```
+
+### a) Visualizar la asociación entre las variables de a pares
+
+```{r}
+pairs( trees )
+```
+
+```{r}
+corrplot( cor( trees ), method = "circle")
+```
+
+### b) Ajuste un modelo lineal simple para cada una de las dos predictoras disponibles
+
+```{r}
+model.girth = lm( Volume ~ Girth, data = trees )
+summary ( model.girth )
+```
+
+```{r}
+model.height = lm( Volume ~ Height, data = trees )
+summary( model.height )
+```
+
+### c) Realice un análisis de diagnóstico en cada caso y señale en caso de haberlos, puntos influyentes y outliers
+
+#### Modelo GIRTH
+
+```{r}
+test_supuestos( model.girth )
+```
+
+```{r}
+par( mfrow = c(2,2) )
+plot( model.girth )
+```
+
+```{r}
+influencePlot( model.girth )
+```
+
+```{r}
+summary( influence.measures(model.girth) )
+```
+
+```{r}
+outlierTest( model.girth )
+```
+
+#### Modelo HEIGHT
+
+```{r}
+test_supuestos( model.height )
+```
+
+```{r}
+par( mfrow = c(2,2) )
+plot( model.height )
+```
+
+```{r}
+influencePlot(model.height)
+```
+
+```{r}
+summary( influence.measures( model.height ) )
+```
+
+```{r}
+outlierTest( model.height )
+```
+
+### d) Estime un intervalo de confianza para los coeficientes del modelo lineal estimado en cada caso
+
+#### Modelo GIRTH
+
+```{r}
+predict( model.girth, interval = "confidence", level = 0.95 )
+```
+
+#### Modelo HEIGHT
+
+```{r}
+predict( model.height, interval = "confidence", level = 0.95 )
+```
+
+### e) Ajuste un nuevo modelo sin la/s observaciones influyentes
+
+#### Modelo GIRTH
+
+```{r include=FALSE}
+inflpointsG <- as.array( as.numeric(
+  row.names( influencePlot( model.girth ) ) ) )
+```
+
+```{r}
+trees.e1 <- trees[ -inflpointsG ,]
+model.trees.e1 <- lm (Volume ~ Girth, data = trees.e1)
+summary(model.trees.e1)
+```
+
+#### Modelo HEIGHT
+
+```{r include=FALSE}
+inflpointsH <- as.array( as.numeric(
+  row.names( influencePlot( model.height ) ) ) )
+```
+
+```{r}
+trees.e2 <- trees[-inflpointsH,]
+model.trees.e2 <- lm (Volume ~ Height, data = trees.e2)
+summary(model.trees.e2)
+```
+
+### f) Construya el intervalo de confianza y el de predicción del 95% para un árbol cuyo diámetro es 16.1 pulgadas
+
+```{r}
+predict( model.girth, 
+         newdata = data.frame(Girth = 16.1), 
+         interval = "confidence")
+```
+
+```{r}
+predict(model.girth, 
+        newdata = data.frame(Girth = 16.1), 
+        interval = "prediction")
+
+```
+
+### g) Ajuste un modelo utilizando conjuntamente las dos variables predictoras y compare este ajuste con el mejor de los modelos anteriores mediante un test de modelos anidados. Concluya.
+
+```{r}
+model.girth.height <- lm (Volume ~ Girth + Height, data = trees)
+summary(model.girth.height)
+```
+
+```{r}
+anova(model.girth)
+```
+
+```{r}
+anova(model.girth, model.girth.height)
+```
+
+```{r}
+anova(model.height)
+```
+
+```{r}
+anova(model.height, model.girth.height)
+```
+
+## Ejercicio 2.2
+
+<https://rpubs.com/Joaquin_AR/226291>
+
+El departamento de ventas de una empresa quiere estudiar la influencia que tienen los distintos canales de publicidad sobre las ventas de unproducto recién lanzado al mercado. Se dispone de un conjunto de datos quecontiene los ingresos (en millones) conseguido por ventas en 200 regiones, así como la cantidad de presupuesto, también en millones, destinado a anuncios por radio, TV y periódicos en cada una de ellas. Los datos están disponibles en la base publicidad.xlsx .
+
+### Dataset
+
+```{r}
+publicidad <- read_excel("./datasets/publicidad.xlsx") 
+```
+
+### a) Ajustar un modelo de regresión lineal simple para cada una de las variables predictoras por separado. Realizar a continuación el análisis diagnóstico de los modelos.
+
+#### Modelo TV
+
+```{r}
+model.tv = lm( ventas ~ tv, data = publicidad )
+summary ( model.tv )
+```
+
+```{r}
+test_supuestos( model.tv )
+```
+
+#### Modelo Radio
+
+```{r}
+model.radio = lm( ventas ~ radio, data = publicidad )
+summary ( model.radio )
+```
+
+```{r}
+test_supuestos( model.radio )
+```
+
+#### Modelo Periodico
+
+```{r}
+model.periodico = lm( ventas ~ periodico, data = publicidad )
+summary ( model.periodico )
+```
+
+```{r}
+test_supuestos( model.periodico )
+```
+
+### b) Ajustar un modelo aditivo con las tres variables y decidir si alguna de ellas no es significativa (test de Wald).
+
+```{r}
+model.multi = lm( ventas ~ tv+radio+periodico, data = publicidad )
+summary( model.multi )
+```
+
+```{r}
+waldtest(model.multi, vcov = vcovHC)
+```
+
+Del test de Wald se puede observar facilmente que la variable **periodico** no es significativa frente a **tv** o **radio**.
+
+```{r}
+corrplot(cor(publicidad))
+```
+
+### c) Ajustar los modelos de a pares y quedarse con el que mejor explique la variable respuesta utilizando el criterio de AIC, R2 y Cp_Mallows.
+
+```{r}
+library( olsrr )
+#ols_step_all_possible
+#Probar para hacer de a pares
+ols_step_all_possible(model.multi)
+#ols_step_forward()
+```
+
+```{r}
+# Ajuste de modelos de a pares
+modelo_tv_radio <- lm(ventas ~ tv + radio, data = publicidad)
+modelo_radio_periodicos <- lm(ventas ~ radio + periodico, data = publicidad)
+modelo_tv_periodicos <- lm(ventas ~ tv + periodico, data = publicidad)
+
+# Obtener el número óptimo de predictores para cada modelo
+reg_tv_radio <- regsubsets(ventas ~ tv + radio, data = publicidad)
+reg_radio_periodicos <- regsubsets(ventas ~ radio + periodico, data = publicidad)
+reg_tv_periodicos <- regsubsets(ventas ~ tv + periodico, data = publicidad)
+
+# AIC
+aic_tv_radio <- AIC(modelo_tv_radio)
+aic_radio_periodicos <- AIC(modelo_radio_periodicos)
+aic_tv_periodicos <- AIC(modelo_tv_periodicos)
+
+# R2
+r2_tv_radio <- summary(modelo_tv_radio)$r.squared
+r2_radio_periodicos <- summary(modelo_radio_periodicos)$r.squared
+r2_tv_periodicos <- summary(modelo_tv_periodicos)$r.squared
+
+# Cp de Mallows
+cp_tv_radio <- min(summary(reg_tv_radio)$cp)
+cp_radio_periodicos <- min(summary(reg_radio_periodicos)$cp)
+cp_tv_periodicos <- min(summary(reg_tv_periodicos)$cp)
+
+# Dataframe con los modelos y las métricas
+model_data <- data.frame(
+  Modelo = c("TV + Radio", "Radio + Periodico", "TV + Periodico"),
+  AIC = c(aic_tv_radio, aic_radio_periodicos, aic_tv_periodicos),
+  R2 = c(r2_tv_radio, r2_radio_periodicos, r2_tv_periodicos),
+  Cp_Mallows = c(cp_tv_radio, cp_radio_periodicos, cp_tv_periodicos)
+)
+
+model_data
+```
+
+Basado en esos resultados donde se espera tener el menor AIC, el mayor R2 y el mayor Cp, entonces, se elige el modelo de TV + Radio.
+
+### d) Grafique para el modelo seleccionado el plano de ajuste y evalue si le parece adecuado.
+
+```{r}
+rango_tv <- range(publicidad$tv)
+nuevos_valores_tv <- seq(from = rango_tv[1], to = rango_tv[2], length.out = 20)
+rango_radio <- range(publicidad$radio)
+nuevos_valores_radio <- seq(from = rango_radio[1], to = rango_radio[2],
+                            length.out = 20)
+
+predicciones <- outer(X = nuevos_valores_tv, Y = nuevos_valores_radio, 
+                      FUN = function(tv, radio) {
+                        predict(object = modelo_tv_radio, newdata = data.frame(tv, radio))
+                      })
+
+superficie <- persp(x = nuevos_valores_tv, y = nuevos_valores_radio,
+                    z = predicciones,
+                    theta = 18, phi = 20,
+                    col = "lightblue", shade = 0.1,
+                    xlab = "tv", ylab = "radio", zlab = "ventas",
+                    ticktype = "detailed",
+                    main = "Predición ventas ~ TV y Radio")
+
+observaciones <- trans3d(publicidad$tv, publicidad$radio, publicidad$ventas, superficie)
+error <- trans3d(publicidad$tv, publicidad$radio, fitted(modelo_tv_radio), superficie)
+points(observaciones, col = "red", pch = 16)
+segments(observaciones$x, observaciones$y, error$x, error$y)
+```
+
+### e) Considere el mejor modelo pero ahora con interacción. Compare los modelos con y sin interacción.
+
+```{r}
+modelo_interaccion <- lm(formula = ventas ~ tv + radio + tv:radio, data = publicidad)
+summary(modelo_interaccion)
+```
+
+```{r}
+
+# La función outer() permite aplicar una función a cada combinación 
+# de los parámetros x, y pasados como argumento, es una alternativa 
+# a utilizar expand.grid()
+
+predicciones <- outer(X = nuevos_valores_tv, Y = nuevos_valores_radio, 
+                      FUN = function(tv, radio) {
+                          predict(object = modelo_interaccion,
+                                  newdata = data.frame(tv, radio))
+                          })
+
+superficie <- persp(x = nuevos_valores_tv, y = nuevos_valores_radio,
+                    z = predicciones,
+                    theta = 18, phi = 20,
+                    col = "lightblue", shade = 0.1,
+                    xlab = "tv", ylab = "radio", zlab = "ventas",
+                    ticktype = "detailed",
+                    main = "Predición ventas ~ TV y Radio"
+                    )
+# Se pueden representar las observaciones a partir de las cuales 
+# se ha creado la superficie así como segmentos que midan la 
+# distancia respecto al modelo_interaccion generado.
+observaciones <- trans3d(publicidad$tv, publicidad$radio, publicidad$ventas, superficie)
+error <- trans3d(publicidad$tv, publicidad$radio, fitted(modelo_interaccion),
+                 superficie)
+points(observaciones, col = "red", pch = 16)
+segments(observaciones$x, observaciones$y, error$x, error$y)
+```
+
+Se puede emplear un ANOVA para realizar un test de hipótesis y obtener un *p-value* que evalúe la hipótesis nula de que ambos modelos se ajustan a los datos igual de bien.
+
+```{r}
+anova(modelo_tv_radio, modelo_interaccion)
+```
+
+```{r}
+summary(modelo_tv_radio)$r.square
+summary(modelo_interaccion)$r.square
+```
+
+Los resultados muestran una evidencia clara de que la interacción *tv* x *radio* es significativa y de que el modelo que incorpora la interacción (*Adjusted R-squared* = 0.9673) es superior al modelo que solo contemplaba el efecto de los predictores por separado (*Adjusted R-squared* = 0.8956).
+
+## Ejercicio 2.3
+
+### Dataset
+
+```{r}
+#Libreria carData
+data(Salaries)
+```
+
+### a) Ajustar un modelo lineal para estimar el salario en función del sexo.
+
+```{r}
+modelo.salaries <- lm(salary ~ sex, data = Salaries)
+summary( modelo.salaries ) 
+```
+
+### b) Ajustar un modelo lineal para estimar el salario en función de los años de servicio.
+
+```{r}
+model.salary <- lm(salary ~ yrs.service, data = Salaries)
+summary(model.salary)
+```
+
+### c) Encontrar el modelo lineal que produzca el mejor ajuste con dos variables. Es necesario considerar interacción?
+
+```{r}
+
+modelo_1 <- lm(salary ~ sex, data = Salaries)
+modelo_2 <- lm(salary ~ yrs.service, data = Salaries)
+modelo_3 <- lm(salary ~ sex + yrs.service, data = Salaries)
+modelo_4 <- lm(salary ~ sex + yrs.since.phd, data = Salaries)
+modelo_5 <- lm(salary ~ yrs.service + yrs.since.phd, data = Salaries)
+modelo_6 <- lm(salary ~ sex * yrs.service, data = Salaries)
+modelo_7 <- lm(salary ~ sex + rank, data = Salaries)
+modelo_8 <- lm(salary ~ yrs.service + rank, data = Salaries)
+modelo_9 <- lm(salary ~ sex * yrs.service + rank, data = Salaries)
+
+# Comparar los modelos utilizando criterios de ajuste
+modelos <- list(modelo_1, modelo_2, modelo_3, modelo_4, modelo_5, modelo_6, modelo_7, modelo_8, modelo_9)
+criterios_ajuste <- c("AIC", "BIC", "R-squared", "Adjusted R-squared")
+
+resultados <- data.frame(Modelo = 1:length(modelos))
+for (i in 1:length(modelos)) {
+  modelo <- modelos[[i]]
+  resultados[i, "AIC"] <- AIC(modelo)
+  resultados[i, "BIC"] <- BIC(modelo)
+  resultados[i, "R-squared"] <- summary(modelo)$r.squared
+  resultados[i, "Adjusted R-squared"] <- summary(modelo)$adj.r.squared
+}
+
+# Mostrar los resultados
+resultados
+
+```
+
+### d) Ajustar el modelo completo.
+
+```{r}
+modelo_completo <- lm(salary ~ ., data = Salaries)
+summary(modelo_completo)
+```
+
+```{r}
+modelo.completo <- lm(salary~rank+discipline+yrs.service+yrs.since.phd+sex+rank*discipline+rank*yrs.service+rank*yrs.since.phd+rank*sex
+         +discipline*yrs.service+discipline*yrs.since.phd+discipline*sex+yrs.service*yrs.since.phd+yrs.service*sex+yrs.since.phd*sex, data=Salaries)
+summary(modelo.completo)
+```
+
+### e) Proponer un modelo y justificar que es mejor que el modelo completo. Realizar el análisis diagnóstico para este modelo.
+
+```{r}
+best_model <- lm(salary~rank+discipline+discipline*yrs.service+discipline*yrs.since.phd, data = Salaries)
+summary(best_model)
+```
+
+```{r}
+summary(modelo_completo)$r.squared
+summary(modelo.completo)$r.squared
+summary(best_model)$r.squared
+```
+
+```{r}
+test_supuestos(modelo_completo)
+test_supuestos(modelo.completo)
+test_supuestos(best_model)
+```
+
+## Ejercicio 2.4
+
+El conjunto de datos de Boston del paquete MASS recoge la mediana del valor de la vivienda en 506 áreas residenciales de Boston. Junto con el precio (medv), se han registrado 13 variables adicionales.
+
+### Dataset
+
+```{r}
+vivienda <- Boston
+vivienda
+```
+
+### a) Utilizar una regresión polinómica de grado 2, otra de grado 5 y otra de grado 10 para estimar la variable medv en función de la variable lstat.
+
+```{r}
+x <- Boston$lstat
+y <- Boston$medv
+
+X2 <- cbind(1, x, x^2)
+X5 <- cbind(1, x, x^2, x^3, x^4, x^5)
+X10 <- cbind(1, x, x^2, x^3, x^4, x^5, x^6, x^7, x^8, x^9, x^10)
+
+model2 <- lm(y ~ X2)
+model5 <- lm(y ~ X5)
+model10 <- lm(y ~ X10)
+
+summary(model2)
+summary(model5)
+summary(model10)
+```
+
+### b) Comparar estos dos modelos utilizando el criterio de R2, son mejores que un modelo lineal simple?
+
+```{r}
+cat("R2 L", "\t", summary(lm(y ~ x))$r.squared, "\n")
+cat("R2 P2", "\t", summary(model2)$r.squared, "\n")
+cat("R2 P5", "\t", summary(model5)$r.squared, "\n")
+cat("R2 P10", "\t", summary(model10)$r.squared, "\n")
+
+```
+
+Los modelos polinómicos son mejores que un modelo lineal simple, aunque tampoco se observa una mejora significativa en el R2.
+
+### c) Estudie la incorporación de otra de las variables al modelo seleccionado.
+
+```{r}
+#Agrego al modelo polinomico 10 la variable que contempla el promedio de habitaciones por vivienda "rm"
+
+x10 <- Boston$rm
+X10_new <- cbind(X10, x10)
+model10_new <- lm(y ~ X10_new)
+summary(model10_new)
+cat("R2 Nuevo", "\t", summary(model10_new)$r.squared, "\n")
+```
+
+Se aprecia una mejora sustancial en el R2 del modelo.
+
+## Ejercicio 2.5
+
+Con los datos_fifa que contienen 17907 registros correspondientes a 51 variables.
+
+Se identifican dos variables numéricas de interés:
+
+-   Overall: Reputación y jerarquía internacional numérica del jugador.
+
+-   Valor: Sería el valor económico internacional de los jugadores
+
+Definiendo como la variable predictora Overall y como variable respuesta Valor, se pide:
+
+### Dataset
+
+```{r}
+datos_fifa <- read_csv("https://raw.githubusercontent.com/ferdcoz/mcd-reg-adv/main/datasets/datos_fifa.csv")
+```
+
+### a) Visualizar la relación entre ambas variables.
+
+```{r}
+plot(datos_fifa$Valor, datos_fifa$Overall, 
+     xlab = "Overall", ylab = "Valor", 
+     main = "Relación entre Overall y Valor",
+     col = "darkblue", pch = 16)
+```
+
+### b) Ajustar un modelo lineal simple.
+
+```{r}
+modelo <- lm(Valor ~ Overall, data = datos_fifa)
+summary(modelo)
+summary(modelo)$r.square
+```
+
+### c) Ajustar un modelo lineal polinómico (seleccionar el grado adecuado).
+
+```{r}
+
+predictora <- datos_fifa$Overall
+respuesta <- datos_fifa$Valor
+
+grados <- 1:10
+
+resultados <- data.frame(Grados = grados)
+
+for (i in grados) {
+
+  formula <- as.formula(paste("respuesta ~ poly(predictora, ", i, ", raw = TRUE)"))
+  modelo <- lm(formula, data = datos_fifa)
+  resultados[i, "AIC"] <- AIC(modelo)
+  resultados[i, "BIC"] <- BIC(modelo)
+  resultados[i, "R-squared"] <- summary(modelo)$r.squared
+  resultados[i, "Adjusted R-squared"] <- summary(modelo)$adj.r.squared
+}
+
+resultados
+```
+
+### d) Definir la métrica RMSE y evalauar sobre un conjunto de validación los modelos ajustados.
+
+```{r}
+control <- trainControl(method = "cv",    
+                        number = 10,      
+                        savePredictions = TRUE,   
+                        verboseIter = FALSE)    
+
+modelo <- train(Valor ~ Overall,    
+                data = datos_fifa,              
+                method = "lm",             
+                trControl = control)       
+
+modelo$results$RMSE
+```
+
+```{r}
+# Obtener el tamaño del conjunto de entrenamiento (80%)
+tam_entrenamiento <- round(0.8 * length(predictora))
+
+# Generar índices aleatorios para dividir los datos en entrenamiento y validación
+set.seed(123)
+indices <- sample(1:length(predictora))
+
+# Separar los datos en conjunto de entrenamiento y conjunto de validación
+predictora_entrenamiento <- predictora[indices[1:tam_entrenamiento]]
+predictora_validacion <- predictora[indices[(tam_entrenamiento + 1):length(predictora)]]
+respuesta_entrenamiento <- respuesta[indices[1:tam_entrenamiento]]
+respuesta_validacion <- respuesta[indices[(tam_entrenamiento + 1):length(respuesta)]]
+
+# Ajustar el modelo lineal simple con el conjunto de entrenamiento
+modelo <- lm(respuesta_entrenamiento ~ predictora_entrenamiento)
+
+# Predecir los valores de respuesta en el conjunto de validación
+prediccion <- predict(modelo, newdata = data.frame(predictora_entrenamiento = predictora_validacion))
+
+# RMSE
+rmse <- sqrt(mean((respuesta_validacion - prediccion)^2))
+rmse
+
+```
+
+### e) Realizar el análisis diagnóstico en cada caso.
+
+```{r}
+
+```
+
+## Ejercicio 2.6
+
+La base de datos crime.xlsx, tiene 51 observaciones de las siguientes variables:
+
+### Dataset
+
+```{r}
+crimen <- read.csv("datasets/crime.csv", sep = ';')
+```
+
+### a) Ajustar un modelos de regresión OLS y realizar analítica y gráficamente un análisis diagnóstico examinando leverage y distancias de Cook.
+
+```{r}
+# Ajustar un modelo de regresión OLS
+model.crime <- lm(crime ~. -state -sid, data = crimen)
+```
+
+#### Analíticamente
+
+```{r}
+res_stu_1<-rstudent(model.crime)
+res_stu_1[abs(res_stu_1)>3]
+```
+
+```{r}
+summary(influence.measures(model = model.crime))
+```
+
+```{r}
+unique(which(dfbetas(model.crime)[,2]>1))
+```
+
+```{r}
+lev <- hatvalues(model.crime)
+unique(which(lev>0.2))
+```
+
+```{r}
+n<-length(crimen$sid)
+p<-length(model.crime$coefficients)
+unique(which(dffits(model.crime)>2 * sqrt(p / n)))
+```
+
+```{r}
+dcook<-cooks.distance(model.crime)
+influyentes <- unique(which(dcook>4/n))
+influyentes
+```
+
+```{r}
+#punto de corte
+corted<-qf(0.5,2,n-2)
+unique(which(dcook>corted))
+```
+
+#### Gráficamente
+
+```{r}
+influencePlot(model = model.crime)
+```
+
+```{r}
+influenceIndexPlot(model.crime, vars='Bonf', las=1,col='blue')
+```
+
+```{r}
+hist(lev)
+```
+
+```{r}
+# Gráfico de leverage
+plot(model.crime, which = 5)
+
+# Análisis de distancias de Cook
+influenceIndexPlot(model.crime, vars='Cook', las=1,col='blue')
+```
+
+```{r}
+hist(dcook)
+```
+
+### b) Identificar las observaciones influyentes (recordar que 4/n es un valor de corte muy utilizado para las distancias de Cook). Ajustar un modelo OLS sin esas observaciones. Comparar los coeficientes estimados en ambos modelos.
+
+```{r}
+model.crime2 <- lm(crime ~. -state -sid, data = crimen[-influyentes,])
+print(summary(model.crime))
+print(summary(model.crime2))
+```
+
+Se observa que en ambos modelos la variable 'pctmetro' y 'single' son significativas, mientras que otras como 'murder' desaparece al eliminar los valores influyentes detectados previamente.
+
+### c) Generar una nueva variable con el valor absoluto de los residuos y señalar los diez residuos más altos. Coinciden con los valores influyentes?
+
+```{r}
+var_residuos <- abs(residuals(model.crime))
+var_residuos <- order(var_residuos, decreasing = TRUE)[1:10]
+print(influyentes)
+print(var_residuos)
+```
+
+Algunos valores influyentes coinciden con los residuos
+
+### d) Ajustar un modelo de regresión robusta mediante mínimos cuadrados ponderados iterados (IRLS). El comando para ejecutar una regresión robusta está en (library MASS). Se pueden utilizar varias funciones de ponderación en IRLS uar en primera instancia los pesos de Huber.
+
+```{r}
+modelo_robusto <- rlm(crime ~. -state -sid, data = crimen, psi=psi.huber)
+summary(modelo_robusto)
+```
+
+### e) Hacerlo ahora con los pesos de la función bicuadrada ( psi = psi.bisquare).
+
+```{r}
+modelo_robusto2 <- rlm(crime ~. -state -sid, data = crimen, psi=psi.bisquare)
+summary(modelo_robusto2)
+```
+
+## Ejercicio 2.7
+
+En la base de datos USgirl de la biblioteca Brq de R, se encuentran 500 registros correspondientes a edad y peso de mujeres de Estados Unidos. Se pide:
+
+### Dataset
+
+```{r}
+data("USgirl")
+```
+
+### a) Graficar los pesos versus las edades. Qué se puede apreciar en este diagrama de dispersión?
+
+```{r}
+plot(USgirl$Age, USgirl$Weight, xlab = "Edad", ylab = "Peso", main = "Pesos vs Edades", col="gray")
+```
+
+### b) Ajustar un modelo para la mediana y graficar.
+
+```{r}
+modelo_mediana <- rq(Weight ~ Age, data = USgirl, tau = 0.5)
+plot(USgirl$Age, USgirl$Weight, xlab = "Edad", ylab = "Peso", main = "Pesos vs Edades", col="gray")
+abline(modelo_mediana, col = "red")
+```
+
+### c) Ajustar un modelo para los cuartiles y graficar.
+
+```{r}
+modelo_cuartiles <- rq(Weight ~ Age, data = USgirl, tau = c(0.25, 0.5, 0.75))
+plot(USgirl$Age, USgirl$Weight, xlab = "Edad", ylab = "Peso", main = "Pesos vs Edades", col = "gray")
+abline(modelo_cuartiles, col ="orange")
+```
+
+### d) Ajustar un modelo para los deciles y graficar.
+
+```{r}
+modelo_deciles <- rq(Weight ~ Age, data = USgirl, tau = seq(0.1, 0.9, 0.1))
+plot(USgirl$Age, USgirl$Weight, xlab = "Edad", ylab = "Peso", main = "Pesos vs Edades", col = "gray")
+abline(modelo_deciles, col ="purple")
+```
+
+```{r}
+plot(USgirl$Age, USgirl$Weight, xlab = "Edad", ylab = "Peso", main = "Pesos vs Edades", col = "gray")
+abline(modelo_mediana, col = "red")
+abline(modelo_cuartiles, col ="orange")
+abline(modelo_deciles, col ="purple")
+```
+

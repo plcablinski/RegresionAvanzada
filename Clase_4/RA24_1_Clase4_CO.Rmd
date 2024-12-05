@@ -41,8 +41,9 @@ gestage: es la edad gestacional o duración de la gestación del i-ésimo bebé 
 birthwt: es el peso al nacer del i-ésimo niño, en gramos.
 
 ```{r, echo=TRUE}
+rm(list = ls())
 file<-"low birth weight infants.txt"
-
+setwd("C:/RegresionAvanzada/Clase_4")
 data <- read.table(file = file, header = TRUE)
 head(data)
 
@@ -54,6 +55,9 @@ head(data)
 La función glmnet() estandariza por defecto las variables antes de realizar el ajuste del modelo.
 
 ```{r, echo=TRUE}
+xx <- model.matrix(headcirc ~ ., data = data)
+head(xx) 
+head(data)
 x <- model.matrix(headcirc ~ ., data = data)[, -1] 
 head(x)
 
@@ -122,14 +126,72 @@ Se reajusta el modelo con todas las observaciones empleando el valor de lambda �
 ```{r, echo=TRUE}
 modelo_final_lasso <- glmnet(x=x, y=y, alpha=1,lambda=cv_error_lasso$lambda.1se) 
 coef(modelo_final_lasso)
+```
 
-par(mfrow = c(1, 2)) 
+<br>
+
+## Elastic Net
+
+Para obtener un ajuste mediante regresión Elastic Net se indica argumento alpha=0.5
+
+```{r, echo=TRUE}
+modelos_elastic_net <- glmnet(x = x, y = y, alpha = 0.5) 
+plot(modelos_elastic_net, xvar = "lambda", label = TRUE)
+
+set.seed(1) 
+cv_error_elastic_net <- cv.glmnet(x = x, y = y, alpha = 0.5, nfolds = 10) 
+plot(cv_error_elastic_net)
+
+cv_error_elastic_net$lambda.min
+cv_error_elastic_net$lambda.1se
+```
+
+Se reajusta el modelo con todas las observaciones empleando el valor de lambda óptimo. 
+
+```{r, echo=TRUE}
+modelo_final_elastic_net <- glmnet(x=x, y=y, alpha=0.5,lambda=cv_error_elastic_net$lambda.1se) 
+coef(modelo_final_elastic_net)
+```
+
+
+```{r, echo=TRUE}
+par(mfrow = c(1, 3)) 
 plot(cv_error_ridge, ylab = "Mean Square Error Ridge") 
 abline(h = 7) 
 plot(cv_error_lasso, ylab = "Mean Square Error Lasso") 
 abline(h = 7)
+plot(cv_error_elastic_net, ylab = "Mean Square Elastic Net") 
+abline(h = 7)
 par(mfrow = c(1, 1))
 ```
+
+Comparación de los coeficientes obtenidos con Ridge y Lasso.
+
+```{r, echo=TRUE}
+min_mse_ridge <- min(cv_error_ridge$cvm)
+min_mse_ridge
+min_mse_lasso <- min(cv_error_lasso$cvm)
+min_mse_lasso
+min_elastic_net <- min(cv_error_elastic_net$cvm)
+min_elastic_net
+
+# Indicar el  el mínimo test-error con que método se consigue y cual es el valor de MSE
+if (min_mse_ridge < min_mse_lasso & min_mse_ridge < min_elastic_net) {
+  min_mse <- min_mse_ridge 
+  metodo <- "Ridge"
+} else if (min_mse_lasso < min_mse_ridge & min_mse_lasso < min_elastic_net) {
+  min_mse <- min_mse_lasso
+  metodo <- "Lasso"
+} else {
+  min_mse <- min_elastic_net
+  metodo <- "Elastic Net"
+}
+
+print(paste("El método con menor MSE es", metodo, "con un MSE de", min_mse))
+
+
+```
+
 
 <br>
 
@@ -228,17 +290,19 @@ Nuevamente, aunque el menor error se alcanza con 4 componentes, se observa que a
 ### Regresión por mínimos cuadrados
 
 ```{r, echo=TRUE}
+library(caret)
 set.seed(1) 
 indices_entrenamiento <- sample(x = 1:nrow(data), size = round(nrow(data) * (2/3))) 
 # 2/3 de las observaciones 
 indices_test <- (1:nrow(data))[-indices_entrenamiento] 
 data_1 <- data[indices_entrenamiento, ] 
 data_2 <- data[indices_test, ]
-
 #Ordinary least square (regresión por mínimos cuadrados)
 modelo_OLS <- lm(formula = headcirc ~ ., data = data_1) 
 test_MSE_OLS <- mean((predict(modelo_OLS, data_2) - data_2$headcirc)^2) 
 test_MSE_OLS
+caret_MSE_OLS <- RMSE(pred = predict(modelo_OLS, data_2), obs = data_2$headcirc)^2 
+caret_MSE_OLS 
 ```
 
 ### Modelo con selección de variables Backward con 10-cross validation
