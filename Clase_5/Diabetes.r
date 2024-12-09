@@ -117,7 +117,7 @@ accuracy
 
 # Calcular el área bajo la curva ROC
 library(pROC)
-roc_curve <- roc(DIABET, predict(mod_1))
+roc_curve <- roc(DIABET, predict(mod_1, type = "response"))
 plot(roc_curve, col = "blue", lwd = 2, main = "Curva ROC")
 auc(roc_curve)
 
